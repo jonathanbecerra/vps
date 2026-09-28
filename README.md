@@ -65,22 +65,17 @@ make confirm-ssh
 make setup-host
 ```
 
-Setup asks once about Caddy and VPN. To enable Docker Caddy later, run this on the host:
+Setup asks whether to use Caddy and which VPN to use. To configure Caddy later, run this on the host:
 
 ```sh
-make configure-services caddy=docker
+make configure-caddy
 ```
 
-When Caddy is first enabled, choose one or multiple apps, then enter each public hostname and its upstream `host:port`. Use a hostname per app; the upstream must be reachable from the host. Routes live in `/opt/vps/.local/caddy-sites.caddy`:
+Choose one app or multiple apps. For one app, enter its hostname and, if known, the upstream `host:port`. Leaving the upstream blank creates an editable route and skips startup. Add a `reverse_proxy` or `file_server` with `vim`, then run `make configure-caddy`.
 
-```caddyfile
-app.example.com {
-  import site_defaults
-  reverse_proxy 127.0.0.1:8080
-}
-```
+For multiple apps, the command copies `stacks/caddy/caddy-sites-example.caddy` to `/opt/vps/.local/caddy-sites.caddy` and stops. The example has a web app, a REST API, and a static blog. Edit the file with `vim`, replace the example hostnames and upstreams, then run `make configure-caddy`. Put blog files in `/data/www/blog`; Caddy reads them at `/srv/blog`.
 
-Edit that file to add or change routes, then rerun the command to apply them. Point each hostname's DNS record at the VPS.
+Edit `/opt/vps/.local/caddy-sites.caddy` to change routes, then rerun `make configure-caddy`. Point each hostname's DNS record at the VPS.
 
 Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zone or zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW opens TCP 80/443 and UDP 443; add the same inbound rules to the Hetzner firewall. WireGuard creates `/opt/vps/.local/wireguard-client.conf`; open UDP 51820 in the provider firewall too.
 

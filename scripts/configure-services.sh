@@ -6,13 +6,15 @@ preview_if_requested configure-services "$@"
 load_config /etc/vps-setup/host.conf
 action=${1:-configure}
 stack=${2:-}
+caddy_only=no
 if [[ $action == configure ]]; then
   shift
   while (($#)); do
     case $1 in
-      --caddy=*) CADDY_MODE=${1#*=} ;;
+      --enable-caddy) CADDY_MODE=docker ;;
+      --caddy-only) caddy_only=yes ;;
       --vpn=*) VPN=${1#*=} ;;
-      *) die 'Usage: configure-services.sh configure [--caddy=docker|none] [--vpn=NAME]' ;;
+      *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME]' ;;
     esac
     shift
   done
@@ -28,11 +30,14 @@ compose() {
 
 check_stack() {
   case "$stack" in
-    caddy) [[ $CADDY_MODE == docker ]] || die 'Caddy is off. Run make configure-services caddy=docker to start it.' ;;
+    caddy) [[ $CADDY_MODE == docker ]] || die 'Caddy is off. Run make configure-caddy to start it.' ;;
     tailscale) [[ $VPN == "$stack" ]] || die "VPN is set to $VPN. Run make configure-services to change it." ;;
     *) die 'Choose STACK=caddy or tailscale.' ;;
   esac
-  [[ -f $ROOT/.local/$stack.env ]] || die 'Run make configure-services on the host first.'
+  if [[ ! -f $ROOT/.local/$stack.env ]]; then
+    [[ $stack != caddy ]] || die 'Run make configure-caddy on the host first.'
+    die 'Run make configure-services on the host first.'
+  fi
   [[ -f $ROOT/stacks/$stack/compose.lock.json ]] || die "Run make lock-images STACK=$stack first."
 }
 
@@ -93,7 +98,7 @@ esac
 
 require_root
 detect_os
-[[ $ROOT == /opt/vps ]] || die 'Run make configure-services from /opt/vps.'
+[[ $ROOT == /opt/vps ]] || die 'Run this command from /opt/vps.'
 [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Confirm SSH access before starting services.'
 setup_lock
 caddy_sites_tmp=
@@ -102,38 +107,41 @@ cleanup_services() {
   release_setup_lock
 }
 trap cleanup_services EXIT
-if [[ $VPN == wireguard && -z $WG_ENDPOINT ]]; then
+if [[ $caddy_only == no && $VPN == wireguard && -z $WG_ENDPOINT ]]; then
   ask WG_ENDPOINT 'WireGuard public IPv4 address or DNS name'
 fi
 validate_config
 if [[ $CADDY_MODE != docker && -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
-  die 'Stop Docker Caddy before turning it off.'
+  die 'Stop Caddy before disabling it.'
 fi
-if [[ $VPN != tailscale ]] && [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-tailscale) ]]; then
+if [[ $caddy_only == no && $VPN != tailscale ]] && [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-tailscale) ]]; then
   die 'Stop Tailscale before choosing another VPN. Keep a public SSH connection open.'
 fi
-if [[ $VPN != wireguard ]] && systemctl is-active --quiet wg-quick@wg0; then
+if [[ $caddy_only == no && $VPN != wireguard ]] && systemctl is-active --quiet wg-quick@wg0; then
   die 'Stop WireGuard before choosing another VPN. Keep a public SSH connection open.'
 fi
-if [[ $VPN == tailscale && ! -c /dev/net/tun ]]; then die '/dev/net/tun is missing. Enable the tun kernel module on this host.'; fi
+if [[ $caddy_only == no && $VPN == tailscale && ! -c /dev/net/tun ]]; then die '/dev/net/tun is missing. Enable the tun kernel module on this host.'; fi
 admin_group=$(id -gn "$ADMIN_USER")
 install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 "$ROOT/.local"
 umask 077
 
 caddy_domains=()
 caddy_upstreams=()
+caddy_pending=no
 ask_caddy_site() {
   local site upstream port previous
   site=
   upstream=
   ask site 'Site hostname, e.g. app.example.com'
-  ask upstream 'Send traffic to host:port' '127.0.0.1:8080'
+  ask upstream 'Upstream host:port, or Enter to add later'
   site=${site,,}
   [[ $site =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ && ${#site} -le 253 ]] ||
     die 'Enter a public hostname without a scheme or path.'
-  [[ $upstream =~ ^[a-zA-Z0-9.-]+:[0-9]{1,5}$ ]] || die 'Enter an upstream as host:port.'
-  port=${upstream##*:}
-  ((10#$port >= 1 && 10#$port <= 65535)) || die 'Invalid upstream port.'
+  if [[ -n $upstream ]]; then
+    [[ $upstream =~ ^[a-zA-Z0-9.-]+:[0-9]{1,5}$ ]] || die 'Enter an upstream as host:port.'
+    port=${upstream##*:}
+    ((10#$port >= 1 && 10#$port <= 65535)) || die 'Invalid upstream port.'
+  fi
   for previous in "${caddy_domains[@]}"; do
     [[ $previous != "$site" ]] || die "That hostname is already listed: $site"
   done
@@ -142,9 +150,19 @@ ask_caddy_site() {
 }
 
 configure_caddy_sites() {
-  local layout add_more index sites_file="$ROOT/.local/caddy-sites.caddy"
+  local layout index sites_file="$ROOT/.local/caddy-sites.caddy"
   [[ ! -L $sites_file ]] || die "Use a regular file for $sites_file."
   if [[ -s $sites_file ]]; then
+    if grep -Fq 'example.com' "$sites_file"; then
+      caddy_pending=yes
+      note "Replace example hosts in $sites_file, then run make configure-caddy."
+      return
+    fi
+    if ! grep -Eq '^[[:space:]]*(reverse_proxy[[:space:]]+|file_server([[:space:]]|$))' "$sites_file"; then
+      caddy_pending=yes
+      note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-caddy."
+      return
+    fi
     note "Using saved Caddy routes from $sites_file."
     chown "$ADMIN_USER:$admin_group" "$sites_file"
     chmod 0644 "$sites_file"
@@ -155,52 +173,60 @@ configure_caddy_sites() {
   case "$layout" in
     single) ask_caddy_site ;;
     multiple)
-      while :; do
-        ask_caddy_site
-        add_more=yes
-        ask add_more 'Add another app? yes or no' yes
-        case "$add_more" in yes) ;; no) break ;; *) die 'Choose yes or no.' ;; esac
-      done
+      install -o "$ADMIN_USER" -g "$admin_group" -m 0644 \
+        "$ROOT/stacks/caddy/caddy-sites-example.caddy" "$sites_file"
+      caddy_pending=yes
+      note "Edit $sites_file in vim, replace the example hosts and upstreams, then run make configure-caddy."
+      return
       ;;
     *) die 'Choose single or multiple.' ;;
   esac
   caddy_sites_tmp=$(mktemp "$ROOT/.local/caddy-sites.XXXXXX")
   for index in "${!caddy_domains[@]}"; do
-    printf '%s {\n  import site_defaults\n  reverse_proxy %s\n}\n\n' \
-      "${caddy_domains[index]}" "${caddy_upstreams[index]}" >>"$caddy_sites_tmp"
+    printf '%s {\n  import site_defaults\n' "${caddy_domains[index]}" >>"$caddy_sites_tmp"
+    if [[ -n ${caddy_upstreams[index]} ]]; then
+      printf '  reverse_proxy %s\n' "${caddy_upstreams[index]}" >>"$caddy_sites_tmp"
+    else
+      printf '  # Add reverse_proxy host:port or a root and file_server when ready.\n' >>"$caddy_sites_tmp"
+      caddy_pending=yes
+    fi
+    printf '}\n\n' >>"$caddy_sites_tmp"
   done
   chown "$ADMIN_USER:$admin_group" "$caddy_sites_tmp"
   chmod 0644 "$caddy_sites_tmp"
   mv "$caddy_sites_tmp" "$sites_file"
   caddy_sites_tmp=
-  note 'Caddy routes'
-  for index in "${!caddy_domains[@]}"; do
-    printf '  %s -> %s\n' "${caddy_domains[index]}" "${caddy_upstreams[index]}"
-  done
+  if [[ $caddy_pending == yes ]]; then
+    note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-caddy."
+  else
+    note 'Caddy route saved.'
+  fi
 }
 
 if [[ $CADDY_MODE != none ]]; then
-  step 'Set up Docker Caddy'
+  step 'Set up Caddy'
   configure_caddy_sites
-  if [[ ! -f $ROOT/.local/caddy.env ]]; then
+  if [[ $caddy_pending == no && ! -f $ROOT/.local/caddy.env ]]; then
     install -o "$ADMIN_USER" -g "$admin_group" -m 0600 /dev/null "$ROOT/.local/caddy.env"
   fi
-  chmod 0600 "$ROOT/.local/caddy.env"
-  sed -i '/^CADDY_SITE=/d; /^CADDY_UPSTREAM=/d' "$ROOT/.local/caddy.env"
-  if ! grep -qE '^CLOUDFLARE_API_TOKEN=[a-zA-Z0-9_-]+$' "$ROOT/.local/caddy.env" ||
-    grep -Eiq '^CLOUDFLARE_API_TOKEN=placeholder$' "$ROOT/.local/caddy.env"; then
+  if [[ $caddy_pending == no ]]; then
+    chmod 0600 "$ROOT/.local/caddy.env"
+    sed -i '/^CADDY_SITE=/d; /^CADDY_UPSTREAM=/d' "$ROOT/.local/caddy.env"
+  fi
+  if [[ $caddy_pending == no ]] && { ! grep -qE '^CLOUDFLARE_API_TOKEN=[a-zA-Z0-9_-]+$' "$ROOT/.local/caddy.env" ||
+    grep -Eiq '^CLOUDFLARE_API_TOKEN=placeholder$' "$ROOT/.local/caddy.env"; }; then
     note 'The token needs Zone Read and DNS Edit access to each site zone.'
     token=''
     ask_secret token 'Cloudflare API token'
-    [[ $token =~ ^[a-zA-Z0-9_-]+$ && ${token,,} != placeholder ]] || die 'Enter a real Cloudflare API token, or choose Caddy none.'
+    [[ $token =~ ^[a-zA-Z0-9_-]+$ && ${token,,} != placeholder ]] || die 'Enter a real Cloudflare API token.'
     sed -i '/^CLOUDFLARE_API_TOKEN=/d' "$ROOT/.local/caddy.env"
     printf '\nCLOUDFLARE_API_TOKEN=%s\n' "$token" >>"$ROOT/.local/caddy.env"
     unset token
   fi
-  chown "$ADMIN_USER:$admin_group" "$ROOT/.local/caddy.env"
+  if [[ $caddy_pending == no ]]; then chown "$ADMIN_USER:$admin_group" "$ROOT/.local/caddy.env"; fi
 fi
 
-if [[ $VPN != none ]]; then
+if [[ $caddy_only == no && $VPN != none ]]; then
   if [[ $VPN == tailscale ]]; then
     step 'Set up Tailscale'
     if [[ ! -f $ROOT/.local/tailscale.env ]]; then
@@ -216,28 +242,33 @@ for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SE
   printf '%s=%s\n' "$key" "${!key}"
 done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf
-if [[ $CADDY_MODE == docker ]]; then
+if [[ $CADDY_MODE == docker && $caddy_pending == no ]]; then
   install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
+  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /data/www
   ufw allow 80/tcp comment 'Caddy HTTP'
   ufw allow 443/tcp comment 'Caddy HTTPS'
   ufw allow 443/udp comment 'Caddy HTTP3'
 fi
-if [[ $VPN == tailscale ]]; then
+if [[ $caddy_only == no && $VPN == tailscale ]]; then
   chown "$ADMIN_USER:$admin_group" "$ROOT/.local/tailscale.env"
   chmod 0600 "$ROOT/.local/tailscale.env"
   install -d -m 0700 /data/tailscale
 fi
-if [[ $CADDY_MODE == docker ]]; then
+if [[ $CADDY_MODE == docker && $caddy_pending == no ]]; then
   stack=caddy
   apply_stack
 fi
-if [[ $VPN == tailscale ]]; then
+if [[ $caddy_only == no && $VPN == tailscale ]]; then
   stack=tailscale
   apply_stack
-elif [[ $VPN == wireguard ]]; then
+elif [[ $caddy_only == no && $VPN == wireguard ]]; then
   bash "$ROOT/scripts/install-wireguard.sh"
 fi
-if [[ $CADDY_MODE == none && $VPN == none ]]; then
+if [[ $caddy_pending == yes ]]; then
+  :
+elif [[ $caddy_only == yes ]]; then
+  note 'Caddy is up.'
+elif [[ $CADDY_MODE == none && $VPN == none ]]; then
   note 'No optional services selected.'
 else
   note 'Services are up. Settings and keys are in /opt/vps/.local.'

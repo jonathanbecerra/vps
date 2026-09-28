@@ -3,7 +3,7 @@ export DRY_RUN HOST STACK
 .PHONY: help
 .PHONY: check-editor check-repo install-dotfiles install-packages install-tools setup-host update-system
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-services login-vpn lock-images pull-stack show-logs show-status verify-images
+.PHONY: apply-stack build-caddy configure-caddy configure-services login-vpn lock-images pull-stack show-logs show-status verify-images
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
 
@@ -30,12 +30,13 @@ help:
 	  '' \
 	  'Caddy:' \
 	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
+	  '  configure-caddy     Configure Caddy and its site routes' \
 	  '  lock-images         Save pinned Caddy image digests' \
 	  '  verify-images       Check the saved container image digests' \
 	  '' \
 	  'Services:' \
-	  '  configure-services  Apply the saved Caddy and VPN choices' \
 	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
+	  '  configure-services  Apply saved service choices; vpn= selects Tailscale or WireGuard' \
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
 	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
 	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
@@ -98,8 +99,11 @@ lock-images:
 verify-images:
 	@bash scripts/lock-images.sh verify
 
+configure-caddy:
+	@bash scripts/run-root.sh scripts/configure-services.sh configure --enable-caddy --caddy-only
+
 configure-services:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure $(if $(caddy),--caddy=$(caddy)) $(if $(vpn),--vpn=$(vpn))
+	@bash scripts/run-root.sh scripts/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
 
 apply-stack:
 	@bash scripts/apply-stack.sh

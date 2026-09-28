@@ -1,0 +1,19 @@
+# Replace the example hostnames and upstreams. Keep site_defaults in each block.
+# Web app; point this at the app port on the VPS.
+app.example.com {
+  import site_defaults
+  reverse_proxy 127.0.0.1:3000
+}
+
+# REST API; point this at the API port on the VPS.
+api.example.com {
+  import site_defaults
+  reverse_proxy 127.0.0.1:8080
+}
+
+# Static blog; root and file_server serve files from /data/www/blog.
+blog.example.com {
+  import site_defaults
+  root * /srv/blog
+  file_server
+}

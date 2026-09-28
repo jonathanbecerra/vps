@@ -13,6 +13,7 @@ CADDY_MODE='none'
 VPN='none'
 INSTALL_FONT='yes'
 SECURITY_UPDATES='yes'
+CADDY_ONLY=no
 if [[ -z ${HOST:-} && -r /etc/vps-setup/host.conf ]]; then load_config /etc/vps-setup/host.conf; fi
 key_file='<public-key-file>'
 if [[ $command == setup-vps ]]; then
@@ -225,7 +226,8 @@ case "$command" in
     read_setup_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "JetBrains Mono=$INSTALL_FONT, automatic security updates=$SECURITY_UPDATES."
-    note 'Choose Caddy yes or no during setup; Docker and VPN choices are applied later with make configure-services.'
+    note 'Choose Caddy yes or no during setup; run make configure-caddy to add its routes.'
+    note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
@@ -323,21 +325,29 @@ case "$command" in
     if [[ $action == configure ]]; then
       while (($#)); do
         case $1 in
-          --caddy=*) CADDY_MODE=${1#*=} ;;
+          --enable-caddy) CADDY_MODE=docker ;;
+          --caddy-only) CADDY_ONLY=yes ;;
           --vpn=*) VPN=${1#*=} ;;
-          *) die 'Usage: configure-services.sh configure [--caddy=docker|none] [--vpn=NAME]' ;;
+          *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME]' ;;
         esac
         shift
       done
       validate_config
-      note "Apply configured services: Caddy=$CADDY_MODE, VPN=$VPN. Set caddy= or vpn= on the make command to change them."
+      if [[ $CADDY_ONLY == yes ]]; then
+        note 'Configure Caddy only. Leave saved VPN settings alone.'
+      else
+        note "Apply configured services: Caddy=$CADDY_MODE, VPN=$VPN. Set vpn= on make configure-services to change it."
+      fi
       note 'Check for conflicting services. Stop if a mode change would leave one running.'
       if [[ $CADDY_MODE != none ]]; then
-        note 'On first setup, choose single or multiple apps and enter each hostname and upstream.'
-        note 'Write routes to /opt/vps/.local/caddy-sites.caddy; apply later edits with make configure-services caddy=docker.'
+        note 'Choose one app or multiple apps on first setup. Single-app upstream is optional.'
+        note 'Multiple apps copy stacks/caddy/caddy-sites-example.caddy to /opt/vps/.local/caddy-sites.caddy for editing.'
+        note 'Run make configure-caddy after routes have hostnames and upstreams.'
         note 'Ask for a Cloudflare token with Zone Read and DNS Edit access to the site zones.'
         note 'Reject placeholder token input before starting Caddy.'
         note 'Save the hidden token in /opt/vps/.local/caddy.env with mode 0600.'
+        note 'Only open the firewall and start Caddy after routes are ready.'
+        note "Create /data/www owned by $ADMIN_USER and mount it read-only at /srv for static sites."
         run install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
         for port in 80/tcp 443/tcp 443/udp; do run ufw allow "$port"; done
       fi

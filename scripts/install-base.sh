@@ -96,7 +96,7 @@ printf '  %-18s %s\n' 'JetBrains Mono' "$INSTALL_FONT"
 printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
-printf '  Caddy and VPN choices are saved for make configure-services.\n'
+printf '  Configure Caddy routes with make configure-caddy; apply VPN choices with make configure-services.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
 

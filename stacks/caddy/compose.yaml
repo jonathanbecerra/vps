@@ -11,6 +11,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../../.local/caddy-sites.caddy:/etc/caddy/sites.caddy:ro
+      - /data/www:/srv:ro
       - /data/caddy/data:/data
       - /data/caddy/config:/config
     read_only: true
