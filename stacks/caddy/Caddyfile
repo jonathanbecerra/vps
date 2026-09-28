@@ -1,0 +1,13 @@
+{
+  admin unix//run/caddy/admin.sock|0600
+}
+
+{$CADDY_SITE} {
+  tls {
+    dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    resolvers 1.1.1.1 1.0.0.1
+  }
+  encode zstd gzip
+  reverse_proxy {$CADDY_UPSTREAM}
+  log
+}

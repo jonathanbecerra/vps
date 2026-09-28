@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export DRY_RUN
-.PHONY: help check-editor confirm-ssh configure-ssh install-dotfiles install-packages install-tools rollback-ssh setup-host show-status update-system
+.PHONY: help build-caddy check-editor confirm-ssh configure-ssh install-dotfiles install-packages install-tools lock-images rollback-ssh setup-host show-status update-system verify-images
 
 help:
 	@printf '%s\n' \
@@ -20,7 +20,12 @@ help:
 	  '  install-packages    Install Ubuntu packages from config/apt/packages.txt' \
 	  '  install-tools       Install pinned tools from config/apt/binaries.tsv' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
-	  '  update-system       Update Ubuntu packages'
+	  '  update-system       Update Ubuntu packages' \
+	  '' \
+	  'Caddy:' \
+	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
+	  '  lock-images         Save pinned Caddy image digests' \
+	  '  verify-images       Check the saved Caddy image digests'
 
 setup-host:
 	@$(MAKE) --no-print-directory install-tools
@@ -54,3 +59,12 @@ install-packages:
 
 install-tools:
 	@bash scripts/run-root.sh scripts/install-tools.sh
+
+build-caddy:
+	@bash scripts/build-caddy.sh
+
+lock-images:
+	@bash scripts/lock-images.sh lock
+
+verify-images:
+	@bash scripts/lock-images.sh verify

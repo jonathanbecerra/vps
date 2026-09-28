@@ -1,0 +1,5 @@
+services:
+  builder:
+    image: docker.io/library/caddy:2.11.4-builder
+  runtime:
+    image: docker.io/library/caddy:2.11.4

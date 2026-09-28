@@ -1,0 +1,37 @@
+name: vps-caddy
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      CADDY_SITE: ${CADDY_SITE:?Set CADDY_SITE in .local/caddy.env}
+      CADDY_UPSTREAM: ${CADDY_UPSTREAM:?Set CADDY_UPSTREAM in .local/caddy.env}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .local/caddy.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/caddy/data:/data
+      - /data/caddy/config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/caddy:mode=0700
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --unix-socket /run/caddy/admin.sock http://localhost/config/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
