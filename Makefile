@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
-export DRY_RUN
-.PHONY: help build-caddy check-editor confirm-ssh configure-ssh install-dotfiles install-packages install-tools lock-images rollback-ssh setup-host show-status update-system verify-images
+export DRY_RUN HOST STACK
+.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh install-dotfiles install-packages install-tools login-vpn lock-images pull-stack rollback-ssh setup-host show-logs show-status update-system verify-images
 
 help:
 	@printf '%s\n' \
@@ -25,7 +25,14 @@ help:
 	  'Caddy:' \
 	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
 	  '  lock-images         Save pinned Caddy image digests' \
-	  '  verify-images       Check the saved Caddy image digests'
+	  '  verify-images       Check the saved container image digests' \
+	  '' \
+	  'Services:' \
+	  '  configure-services  Apply the saved Caddy and VPN choices' \
+	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
+	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
+	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
+	  '  show-logs           Follow logs for STACK=caddy or tailscale'
 
 setup-host:
 	@$(MAKE) --no-print-directory install-tools
@@ -68,3 +75,18 @@ lock-images:
 
 verify-images:
 	@bash scripts/lock-images.sh verify
+
+configure-services:
+	@bash scripts/run-root.sh scripts/configure-services.sh configure $(if $(caddy),--caddy=$(caddy)) $(if $(vpn),--vpn=$(vpn))
+
+apply-stack:
+	@bash scripts/apply-stack.sh
+
+login-vpn:
+	@bash scripts/configure-services.sh vpn-login
+
+pull-stack:
+	@bash scripts/configure-services.sh pull "$$STACK"
+
+show-logs:
+	@bash scripts/configure-services.sh logs "$$STACK"

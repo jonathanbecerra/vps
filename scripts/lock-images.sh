@@ -6,9 +6,9 @@ case "$action" in lock | verify) ;; *) die 'Use lock-images.sh lock|verify.' ;; 
 preview_if_requested "${action}-images" "$@"
 find_compose
 begin "$action container image locks"
-stacks=(caddy)
+stacks=(caddy tailscale)
 if [[ -n ${STACK:-} ]]; then
-  case "$STACK" in caddy) stacks=("$STACK") ;; *) die 'Set STACK=caddy.' ;; esac
+  case "$STACK" in caddy | tailscale) stacks=("$STACK") ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
 fi
 temporary=$(mktemp -d "$ROOT/.image-lock.XXXXXX")
 trap 'rm -rf "$temporary"' EXIT
