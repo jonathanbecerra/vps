@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
-.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh install-dotfiles install-packages install-tools login-vpn lock-images pull-stack rollback-ssh setup-host show-logs show-status update-system verify-images
+.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh deploy-stack install-dotfiles install-packages install-tools login-vpn lock-images preview-deploy pull-stack rollback-ssh setup-host show-logs show-status sync-repo update-system verify-images
 
 help:
 	@printf '%s\n' \
@@ -32,7 +32,12 @@ help:
 	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
 	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
-	  '  show-logs           Follow logs for STACK=caddy or tailscale'
+	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
+	  '' \
+	  'Deployment:' \
+	  '  deploy-stack        Check, preview, sync, and apply (HOST=... STACK=...)' \
+	  '  preview-deploy      Show rsync differences (HOST=...)' \
+	  '  sync-repo           Copy the repo with rsync (HOST=...)'
 
 setup-host:
 	@$(MAKE) --no-print-directory install-tools
@@ -90,3 +95,12 @@ pull-stack:
 
 show-logs:
 	@bash scripts/configure-services.sh logs "$$STACK"
+
+deploy-stack:
+	@bash scripts/deploy-stack.sh
+
+preview-deploy:
+	@bash scripts/sync-repo.sh plan
+
+sync-repo:
+	@bash scripts/sync-repo.sh sync
