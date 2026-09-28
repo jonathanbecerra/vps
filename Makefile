@@ -1,9 +1,11 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
 .PHONY: help
-.PHONY: check-editor check-repo install-dotfiles install-packages install-tools setup-host update-system
+.PHONY: check-editor check-repo show-status
+.PHONY: install-dotfiles install-packages install-tools setup-host update-system
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn lock-images pull-stack show-logs show-status verify-images
+.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
+.PHONY: down lock-images recreate restart show-containers up
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
 
@@ -31,8 +33,8 @@ help:
 	  'Caddy:' \
 	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
 	  '  configure-caddy     Configure Caddy and its site routes' \
-	  '  lock-images         Save pinned Caddy image digests' \
-	  '  verify-images       Check the saved container image digests' \
+	  '  lock-images         Lock images from all included Compose files' \
+	  '  verify-images       Check the combined image lock' \
 	  '' \
 	  'Services:' \
 	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
@@ -42,6 +44,11 @@ help:
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
 	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
 	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
+	  '  show-containers     List containers in the combined Compose project' \
+	  '  up                  Start configured services and build local images' \
+	  '  down                Stop all services in the Compose project' \
+	  '  restart             Restart configured services' \
+	  '  recreate            Rebuild and recreate configured services' \
 	  '' \
 	  'Deployment:' \
 	  '  deploy-stack        Check, preview, sync, and apply (HOST=... STACK=...)' \
@@ -97,9 +104,25 @@ build-caddy:
 
 lock-images:
 	@bash scripts/lock-images.sh lock
+	@bash scripts/lock-images.sh verify
 
 verify-images:
 	@bash scripts/lock-images.sh verify
+
+up:
+	@bash scripts/manage-compose.sh up
+
+down:
+	@bash scripts/manage-compose.sh down
+
+restart:
+	@bash scripts/manage-compose.sh restart
+
+recreate:
+	@bash scripts/manage-compose.sh recreate
+
+show-containers:
+	@bash scripts/manage-compose.sh ps
 
 configure-caddy:
 	@bash scripts/run-root.sh scripts/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy

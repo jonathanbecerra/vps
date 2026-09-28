@@ -166,6 +166,38 @@ preview_stack() {
   esac
 }
 
+preview_compose() {
+  local action=$1
+  local -a profiles=()
+  note "Use the saved service choices: Caddy=$CADDY_MODE, VPN=$VPN."
+  [[ $CADDY_MODE != docker ]] || profiles+=(--profile caddy)
+  [[ $VPN != tailscale ]] || profiles+=(--profile tailscale)
+  compose=(docker compose --env-file /opt/vps/.env.example
+    --env-file /opt/vps/.local/caddy.env --env-file /opt/vps/.local/tailscale.env
+    -f /opt/vps/stacks/compose.yaml -f /opt/vps/stacks/compose.lock.yaml)
+  run "${compose[@]}" "${profiles[@]}" config --services
+  case "$action" in
+    up)
+      preview_image_locks verify
+      run "${compose[@]}" "${profiles[@]}" up -d --build
+      ;;
+    down)
+      run "${compose[@]}" --profile caddy --profile tailscale down
+      preview_legacy_compose caddy
+      preview_legacy_compose tailscale
+      ;;
+    restart) run "${compose[@]}" "${profiles[@]}" restart ;;
+    recreate)
+      preview_image_locks verify
+      run "${compose[@]}" "${profiles[@]}" up -d --build --force-recreate --remove-orphans
+      ;;
+    ps)
+      step 'Containers in the Compose project'
+      run "${compose[@]}" --profile caddy --profile tailscale ps -a
+      ;;
+  esac
+}
+
 case "$command" in
   vm-create)
     note "Create $VM_NAME ($VM_IMAGE) with $VM_VCPU vCPU, ${VM_MEMORY} GiB RAM, and $VM_STORAGE storage."
@@ -278,8 +310,13 @@ case "$command" in
     run systemctl enable --now wg-quick@wg0
     ;;
   build-caddy) preview_caddy_build ;;
-  lock-images) preview_image_locks lock "${STACK:-all}" ;;
-  verify-images) preview_image_locks verify "${STACK:-all}" ;;
+  lock-images) preview_image_locks lock ;;
+  verify-images) preview_image_locks verify ;;
+  compose-up) preview_compose up ;;
+  compose-down) preview_compose down ;;
+  compose-restart) preview_compose restart ;;
+  compose-recreate) preview_compose recreate ;;
+  compose-ps) preview_compose ps ;;
   configure-security) preview_security ;;
   install-tools)
     read_setup_packages "$ROOT/config/apt/packages.txt"

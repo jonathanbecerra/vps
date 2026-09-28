@@ -85,6 +85,21 @@ Edit `/opt/vps/.local/caddy-sites.caddy` to change routes, then run `make config
 
 Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zone or zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW opens TCP 80/443 and UDP 443; add the same inbound rules to the Hetzner firewall. WireGuard creates `/opt/vps/.local/wireguard-client.conf`; open UDP 51820 in the provider firewall too.
 
+## Compose
+
+`stacks/compose.yaml` includes each service Compose file. Add a new file under `stacks/<service>/`, add its path under `include:`, then run `make lock-images`; `stacks/compose.lock.yaml` covers registry images across the included files. Caddy's locally built image pins its base image digests in `stacks/caddy/Dockerfile`.
+
+```sh
+make up
+make show-containers
+make restart
+make recreate
+make down
+make verify-images
+```
+
+`make down` removes project containers and networks. Bind-mounted data under `/data` stays in place.
+
 ## Hetzner
 
 ```sh
