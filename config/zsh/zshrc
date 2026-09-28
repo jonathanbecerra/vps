@@ -1,0 +1,73 @@
+[[ -o interactive ]] || return
+if [[ $TERM == xterm-ghostty ]]; then
+  export COLORTERM=truecolor
+  # Older hosts may not have Ghostty's terminal definition yet.
+  if ! infocmp -x "$TERM" >/dev/null 2>&1; then
+    export TERM=xterm-256color
+  fi
+fi
+umask 077
+export EDITOR=nvim VISUAL=nvim
+typeset -U path
+path=(/usr/local/bin "$HOME/.local/bin" $path)
+export HISTFILE="$HOME/.zsh_history"
+HISTSIZE=100000
+SAVEHIST=100000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_EXPIRE_DUPS_FIRST
+setopt HIST_FIND_NO_DUPS HIST_REDUCE_BLANKS HIST_IGNORE_SPACE NO_BEEP
+
+autoload -Uz compinit
+compinit
+bindkey -e
+bindkey '^K' up-line-or-history
+bindkey '^J' down-line-or-history
+bindkey '^[[A' history-beginning-search-backward
+bindkey '^[[B' history-beginning-search-forward
+
+alias cl='clear'
+alias ll='ls -la'
+alias la='ls -A'
+if (( $+commands[eza] )); then
+  alias ls='eza --icons=auto --group-directories-first'
+  alias ll='eza -la --icons=auto --group-directories-first'
+  alias la='eza -a --icons=auto --group-directories-first'
+fi
+alias vi='nvim'
+alias vim='nvim'
+alias lg='lazygit'
+alias ld='lazydocker'
+alias dc='docker compose'
+alias mat='glow'
+(( $+commands[bat] )) || { (( $+commands[batcat] )) && alias bat='batcat'; }
+(( $+commands[fd] )) || { (( $+commands[fdfind] )) && alias fd='fdfind'; }
+
+export FZF_DEFAULT_OPTS='--height=40% --layout=reverse --border'
+if (( $+commands[fzf] )); then
+  if fzf --zsh >/dev/null 2>&1; then
+    eval "$(fzf --zsh)"
+  else
+    for file in /usr/share/doc/fzf/examples/key-bindings.zsh /usr/share/fzf/key-bindings.zsh; do
+      [[ ! -r $file ]] || { source "$file"; break; }
+    done
+  fi
+fi
+
+export DEJA_ACCEPT_KEY='^L' DEJA_CYCLE_KEY='^N'
+export DEJA_TOGGLE_KEY='' DEJA_CYCLE_FUZZY_KEY='' DEJA_CYCLE_FUZZY_BACK_KEY=''
+export DEJA_TOGGLE_EMPTY_KEY='' DEJA_WORD_ACCEPT_KEY=''
+[[ ! -r "$HOME/.local/share/deja/init.zsh" ]] || source "$HOME/.local/share/deja/init.zsh"
+
+prompt_theme="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/powerlevel10k/powerlevel10k.zsh-theme"
+if [[ -r $prompt_theme ]]; then
+  source "$prompt_theme"
+  [[ ! -r "$HOME/.p10k.zsh" ]] || source "$HOME/.p10k.zsh"
+else
+  PROMPT='%n@%m %~ %# '
+fi
+[[ ! -r "$HOME/.zshrc.local" ]] || source "$HOME/.zshrc.local"
+
+# Highlighting needs to see the widgets installed above.
+for file in /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+  [[ ! -r $file ]] || { source "$file"; break; }
+done
+unset file prompt_theme

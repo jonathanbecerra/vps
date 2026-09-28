@@ -1,0 +1,4 @@
+# destination under ~/.local/share	repository	commit
+zsh/powerlevel10k	https://github.com/romkatv/powerlevel10k.git	d05a1b00f9a61f9578bf9dc19b8451942dde8734
+zsh/catppuccin-powerlevel10k-themes	https://github.com/tolkonepiu/catppuccin-powerlevel10k-themes.git	6e72187953e5e9face7fbf8dcc926d691f7d1f2d
+nvim/lazy/lazy.nvim	https://github.com/folke/lazy.nvim.git	306a05526ada86a7b30af95c5cc81ffba93fef97
