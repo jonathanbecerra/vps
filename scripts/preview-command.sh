@@ -224,6 +224,7 @@ case "$command" in
   setup-vps)
     read_setup_packages "$ROOT/config/apt/packages.txt"
     note "Preview values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, font=$INSTALL_FONT."
+    note 'Choose Caddy docker or none, and VPN tailscale, wireguard, or none. Save both in host.conf.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
     upgrade_os

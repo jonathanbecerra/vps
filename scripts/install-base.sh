@@ -38,6 +38,8 @@ SECURITY_UPDATES=yes
 begin 'Set up this Ubuntu box'
 ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
 ask ADMIN_USER 'Admin username' "$ADMIN_USER"
+ask CADDY_MODE 'Run Caddy? docker or none' "$CADDY_MODE"
+ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
 ask INSTALL_FONT 'Install JetBrains Mono Nerd Font? yes or no' "$INSTALL_FONT"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
 validate_config
