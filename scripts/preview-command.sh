@@ -333,9 +333,11 @@ case "$command" in
       note "Apply configured services: Caddy=$CADDY_MODE, VPN=$VPN. Set caddy= or vpn= on the make command to change them."
       note 'Check for conflicting services. Stop if a mode change would leave one running.'
       if [[ $CADDY_MODE != none ]]; then
-        note 'Ask for the domain and upstream when missing; replace a missing or placeholder Cloudflare token.'
+        note 'On first setup, choose single or multiple apps and enter each hostname and upstream.'
+        note 'Write routes to /opt/vps/.local/caddy-sites.caddy; apply later edits with make configure-services caddy=docker.'
+        note 'Ask for a Cloudflare token with Zone Read and DNS Edit access to the site zones.'
         note 'Reject placeholder token input before starting Caddy.'
-        note 'Save /opt/vps/.local/caddy.env with mode 0600. Hide the token while typing.'
+        note 'Save the hidden token in /opt/vps/.local/caddy.env with mode 0600.'
         run install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
         for port in 80/tcp 443/tcp 443/udp; do run ufw allow "$port"; done
       fi

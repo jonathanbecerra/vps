@@ -7,11 +7,10 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      CADDY_SITE: ${CADDY_SITE:?Set CADDY_SITE in .local/caddy.env}
-      CADDY_UPSTREAM: ${CADDY_UPSTREAM:?Set CADDY_UPSTREAM in .local/caddy.env}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .local/caddy.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../.local/caddy-sites.caddy:/etc/caddy/sites.caddy:ro
       - /data/caddy/data:/data
       - /data/caddy/config:/config
     read_only: true

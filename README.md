@@ -65,7 +65,24 @@ make confirm-ssh
 make setup-host
 ```
 
-Setup asks once about Docker Caddy and VPN. Later, `make configure-services` applies those choices and asks only for missing domains or credentials. Example: `make configure-services caddy=docker vpn=tailscale`. WireGuard creates `/opt/vps/.local/wireguard-client.conf`; open UDP 51820 in the provider firewall too.
+Setup asks once about Caddy and VPN. To enable Docker Caddy later, run this on the host:
+
+```sh
+make configure-services caddy=docker
+```
+
+When Caddy is first enabled, choose one or multiple apps, then enter each public hostname and its upstream `host:port`. Use a hostname per app; the upstream must be reachable from the host. Routes live in `/opt/vps/.local/caddy-sites.caddy`:
+
+```caddyfile
+app.example.com {
+  import site_defaults
+  reverse_proxy 127.0.0.1:8080
+}
+```
+
+Edit that file to add or change routes, then rerun the command to apply them. Point each hostname's DNS record at the VPS.
+
+Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zone or zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW opens TCP 80/443 and UDP 443; add the same inbound rules to the Hetzner firewall. WireGuard creates `/opt/vps/.local/wireguard-client.conf`; open UDP 51820 in the provider firewall too.
 
 ## Hetzner
 

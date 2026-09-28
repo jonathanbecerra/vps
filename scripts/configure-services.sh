@@ -96,6 +96,12 @@ detect_os
 [[ $ROOT == /opt/vps ]] || die 'Run make configure-services from /opt/vps.'
 [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Confirm SSH access before starting services.'
 setup_lock
+caddy_sites_tmp=
+cleanup_services() {
+  [[ -z $caddy_sites_tmp ]] || rm -f "$caddy_sites_tmp"
+  release_setup_lock
+}
+trap cleanup_services EXIT
 if [[ $VPN == wireguard && -z $WG_ENDPOINT ]]; then
   ask WG_ENDPOINT 'WireGuard public IPv4 address or DNS name'
 fi
@@ -110,30 +116,80 @@ if [[ $VPN != wireguard ]] && systemctl is-active --quiet wg-quick@wg0; then
   die 'Stop WireGuard before choosing another VPN. Keep a public SSH connection open.'
 fi
 if [[ $VPN == tailscale && ! -c /dev/net/tun ]]; then die '/dev/net/tun is missing. Enable the tun kernel module on this host.'; fi
-step 'Save service choices'
-for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
-  printf '%s=%s\n' "$key" "${!key}"
-done >/etc/vps-setup/host.conf
-chmod 0644 /etc/vps-setup/host.conf
 admin_group=$(id -gn "$ADMIN_USER")
 install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 "$ROOT/.local"
 umask 077
 
+caddy_domains=()
+caddy_upstreams=()
+ask_caddy_site() {
+  local site upstream port previous
+  site=
+  upstream=
+  ask site 'Site hostname, e.g. app.example.com'
+  ask upstream 'Send traffic to host:port' '127.0.0.1:8080'
+  site=${site,,}
+  [[ $site =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ && ${#site} -le 253 ]] ||
+    die 'Enter a public hostname without a scheme or path.'
+  [[ $upstream =~ ^[a-zA-Z0-9.-]+:[0-9]{1,5}$ ]] || die 'Enter an upstream as host:port.'
+  port=${upstream##*:}
+  ((10#$port >= 1 && 10#$port <= 65535)) || die 'Invalid upstream port.'
+  for previous in "${caddy_domains[@]}"; do
+    [[ $previous != "$site" ]] || die "That hostname is already listed: $site"
+  done
+  caddy_domains+=("$site")
+  caddy_upstreams+=("$upstream")
+}
+
+configure_caddy_sites() {
+  local layout add_more index sites_file="$ROOT/.local/caddy-sites.caddy"
+  [[ ! -L $sites_file ]] || die "Use a regular file for $sites_file."
+  if [[ -s $sites_file ]]; then
+    note "Using saved Caddy routes from $sites_file."
+    chown "$ADMIN_USER:$admin_group" "$sites_file"
+    chmod 0644 "$sites_file"
+    return
+  fi
+  layout=single
+  ask layout 'Caddy apps? single or multiple' single
+  case "$layout" in
+    single) ask_caddy_site ;;
+    multiple)
+      while :; do
+        ask_caddy_site
+        add_more=yes
+        ask add_more 'Add another app? yes or no' yes
+        case "$add_more" in yes) ;; no) break ;; *) die 'Choose yes or no.' ;; esac
+      done
+      ;;
+    *) die 'Choose single or multiple.' ;;
+  esac
+  caddy_sites_tmp=$(mktemp "$ROOT/.local/caddy-sites.XXXXXX")
+  for index in "${!caddy_domains[@]}"; do
+    printf '%s {\n  import site_defaults\n  reverse_proxy %s\n}\n\n' \
+      "${caddy_domains[index]}" "${caddy_upstreams[index]}" >>"$caddy_sites_tmp"
+  done
+  chown "$ADMIN_USER:$admin_group" "$caddy_sites_tmp"
+  chmod 0644 "$caddy_sites_tmp"
+  mv "$caddy_sites_tmp" "$sites_file"
+  caddy_sites_tmp=
+  note 'Caddy routes'
+  for index in "${!caddy_domains[@]}"; do
+    printf '  %s -> %s\n' "${caddy_domains[index]}" "${caddy_upstreams[index]}"
+  done
+}
+
 if [[ $CADDY_MODE != none ]]; then
   step 'Set up Docker Caddy'
+  configure_caddy_sites
   if [[ ! -f $ROOT/.local/caddy.env ]]; then
-    ask CADDY_SITE 'Domain, e.g. app.example.com'
-    ask CADDY_UPSTREAM 'Send traffic to host:port' '127.0.0.1:8080'
-    [[ $CADDY_SITE =~ ^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$ ]] || die 'Enter a domain name without a scheme or path.'
-    [[ $CADDY_UPSTREAM =~ ^[a-zA-Z0-9.-]+:[0-9]{1,5}$ ]] || die 'Enter an upstream as host:port.'
-    upstream_port=${CADDY_UPSTREAM##*:}
-    ((10#$upstream_port >= 1 && 10#$upstream_port <= 65535)) || die 'Invalid upstream port.'
-    printf 'CADDY_SITE=%s\nCADDY_UPSTREAM=%s\n' "$CADDY_SITE" "$CADDY_UPSTREAM" >"$ROOT/.local/caddy.env"
+    install -o "$ADMIN_USER" -g "$admin_group" -m 0600 /dev/null "$ROOT/.local/caddy.env"
   fi
   chmod 0600 "$ROOT/.local/caddy.env"
+  sed -i '/^CADDY_SITE=/d; /^CADDY_UPSTREAM=/d' "$ROOT/.local/caddy.env"
   if ! grep -qE '^CLOUDFLARE_API_TOKEN=[a-zA-Z0-9_-]+$' "$ROOT/.local/caddy.env" ||
     grep -Eiq '^CLOUDFLARE_API_TOKEN=placeholder$' "$ROOT/.local/caddy.env"; then
-    note 'The Cloudflare token needs Zone Read and DNS Edit for this domain.'
+    note 'The token needs Zone Read and DNS Edit access to each site zone.'
     token=''
     ask_secret token 'Cloudflare API token'
     [[ $token =~ ^[a-zA-Z0-9_-]+$ && ${token,,} != placeholder ]] || die 'Enter a real Cloudflare API token, or choose Caddy none.'
@@ -142,10 +198,6 @@ if [[ $CADDY_MODE != none ]]; then
     unset token
   fi
   chown "$ADMIN_USER:$admin_group" "$ROOT/.local/caddy.env"
-  install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
-  ufw allow 80/tcp comment 'Caddy HTTP'
-  ufw allow 443/tcp comment 'Caddy HTTPS'
-  ufw allow 443/udp comment 'Caddy HTTP3'
 fi
 
 if [[ $VPN != none ]]; then
@@ -157,10 +209,23 @@ if [[ $VPN != none ]]; then
       printf 'VPN_HOSTNAME=%s\nTS_AUTHKEY=%s\n' "$SERVER_HOSTNAME" "$token" >"$ROOT/.local/tailscale.env"
       unset token
     fi
-    chown "$ADMIN_USER:$admin_group" "$ROOT/.local/tailscale.env"
-    chmod 0600 "$ROOT/.local/tailscale.env"
-    install -d -m 0700 /data/tailscale
   fi
+fi
+step 'Save service choices'
+for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
+  printf '%s=%s\n' "$key" "${!key}"
+done >/etc/vps-setup/host.conf
+chmod 0644 /etc/vps-setup/host.conf
+if [[ $CADDY_MODE == docker ]]; then
+  install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
+  ufw allow 80/tcp comment 'Caddy HTTP'
+  ufw allow 443/tcp comment 'Caddy HTTPS'
+  ufw allow 443/udp comment 'Caddy HTTP3'
+fi
+if [[ $VPN == tailscale ]]; then
+  chown "$ADMIN_USER:$admin_group" "$ROOT/.local/tailscale.env"
+  chmod 0600 "$ROOT/.local/tailscale.env"
+  install -d -m 0700 /data/tailscale
 fi
 if [[ $CADDY_MODE == docker ]]; then
   stack=caddy
