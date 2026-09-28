@@ -355,10 +355,17 @@ case "$command" in
         note 'Ask for a Cloudflare token with Zone Read and DNS Edit access to the site zones.'
         note 'Reject placeholder token input before starting Caddy.'
         note 'Save the hidden token in /opt/vps/.local/caddy.env with mode 0600.'
+        note 'Set TZ=America/New_York in the Caddy env file if it has no TZ value.'
         note 'Only open the firewall and start Caddy after routes are ready.'
         note 'Stop an already running Caddy container if the replacement routes still need editing.'
-        note "Create /data/www owned by $ADMIN_USER and mount it read-only at /srv for static sites."
+        note 'Create /data/www/blog and keep the blog files there; Caddy reads them from /srv/blog.'
         run install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
+        run install -d -o "$ADMIN_USER" -g '<admin-primary-group>' -m 0755 /data/www/blog
+        if [[ ! -e /data/www/blog/index.html ]]; then
+          note 'Copy the starter blog page if /data/www/blog/index.html does not exist.'
+          run install -o "$ADMIN_USER" -g '<admin-primary-group>' -m 0644 \
+            "$ROOT/stacks/caddy/www/blog/index.html" /data/www/blog/index.html
+        fi
         for port in 80/tcp 443/tcp 443/udp; do run ufw allow "$port"; done
       fi
       if [[ $CADDY_ONLY == no && $VPN != none ]]; then

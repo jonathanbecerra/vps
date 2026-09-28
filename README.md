@@ -75,6 +75,10 @@ Choose one app or multiple apps. For one app, enter its hostname and, if known, 
 
 For multiple apps, the command copies `stacks/caddy/caddy-sites-example.caddy` to `/opt/vps/.local/caddy-sites.caddy` and stops. The example has a web app, a REST API, and a static blog. Edit the file with `vim`, replace the example hostnames and upstreams, then run `make configure-services`. Put blog files in `/data/www/blog`; Caddy reads them at `/srv/blog`.
 
+The top-level Caddyfile imports the route file once. TLS stays inside the site block; the sample uses one wildcard block to cover all three routes in a zone. Add another site block with TLS settings for a different zone. `TZ` is set to `America/New_York` in `.env.example`.
+
+`/data/www` is mounted read-only inside Caddy at `/srv`. For the sample blog, put `index.html` and the rest of the site in `/data/www/blog`; `https://blog.example.com/` serves `/data/www/blog/index.html`. Setup adds a starter page if `index.html` is missing. Keep backups in `/data/backups`, not in the web root.
+
 Edit `/opt/vps/.local/caddy-sites.caddy` to change routes, then run `make configure-services` to apply them. Run `make configure-caddy` to start over; answer `yes` to replace the saved routes or `no` to keep and apply them. Point each hostname's DNS record at the VPS.
 
 `make configure-services` handles the saved Caddy choice, then the saved VPN choice. Use `make configure-tailscale` or `make configure-wireguard` to configure only that VPN.

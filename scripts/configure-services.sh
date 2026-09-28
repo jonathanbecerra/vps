@@ -191,9 +191,9 @@ configure_caddy_sites() {
   esac
   caddy_sites_tmp=$(mktemp "$ROOT/.local/caddy-sites.XXXXXX")
   for index in "${!caddy_domains[@]}"; do
-    printf '%s {\n  import site_defaults\n' "${caddy_domains[index]}" >>"$caddy_sites_tmp"
+    printf '%s {\n  tls {\n    dns cloudflare {env.CLOUDFLARE_API_TOKEN}\n    propagation_delay 2m\n    resolvers 1.1.1.1\n  }\n' "${caddy_domains[index]}" >>"$caddy_sites_tmp"
     if [[ -n ${caddy_upstreams[index]} ]]; then
-      printf '  reverse_proxy %s\n' "${caddy_upstreams[index]}" >>"$caddy_sites_tmp"
+      printf '  reverse_proxy %s {\n    header_up -X-Forwarded-For\n  }\n' "${caddy_upstreams[index]}" >>"$caddy_sites_tmp"
     else
       printf '  # Add reverse_proxy host:port or a root and file_server when ready.\n' >>"$caddy_sites_tmp"
       caddy_pending=yes
@@ -219,6 +219,7 @@ if [[ $vpn_only == no && $CADDY_MODE != none ]]; then
   fi
   if [[ $caddy_pending == no ]]; then
     chmod 0600 "$ROOT/.local/caddy.env"
+    grep -q '^TZ=' "$ROOT/.local/caddy.env" || printf 'TZ=America/New_York\n' >>"$ROOT/.local/caddy.env"
     sed -i '/^CADDY_SITE=/d; /^CADDY_UPSTREAM=/d' "$ROOT/.local/caddy.env"
   fi
   if [[ $caddy_pending == no ]] && { ! grep -qE '^CLOUDFLARE_API_TOKEN=[a-zA-Z0-9_-]+$' "$ROOT/.local/caddy.env" ||
@@ -257,7 +258,11 @@ done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf
 if [[ $vpn_only == no && $CADDY_MODE == docker && $caddy_pending == no ]]; then
   install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
-  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /data/www
+  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /data/www/blog
+  if [[ ! -e /data/www/blog/index.html ]]; then
+    install -o "$ADMIN_USER" -g "$admin_group" -m 0644 \
+      "$ROOT/stacks/caddy/www/blog/index.html" /data/www/blog/index.html
+  fi
   ufw allow 80/tcp comment 'Caddy HTTP'
   ufw allow 443/tcp comment 'Caddy HTTPS'
   ufw allow 443/udp comment 'Caddy HTTP3'
