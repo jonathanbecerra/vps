@@ -1,6 +1,11 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
-.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh create-vm deploy-stack install-dotfiles install-packages install-tools login-vpn lock-images preview-deploy pull-stack rollback-ssh setup-host show-logs show-status sync-repo update-system verify-images
+.PHONY: help
+.PHONY: check-editor install-dotfiles install-packages install-tools setup-host update-system
+.PHONY: confirm-ssh configure-ssh rollback-ssh
+.PHONY: apply-stack build-caddy configure-services login-vpn lock-images pull-stack show-logs show-status verify-images
+.PHONY: deploy-stack preview-deploy sync-repo
+.PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
 
 help:
 	@printf '%s\n' \
@@ -40,7 +45,12 @@ help:
 	  '  sync-repo           Copy the repo with rsync (HOST=...)' \
 	  '' \
 	  'Local VMs:' \
-	  '  create-vm           Create Ubuntu: make create-vm name=lab vcpu=8 memory=16 storage=64'
+	  '  create-vm           Create Ubuntu: make create-vm name=lab vcpu=8 memory=16 storage=64' \
+	  '  list-vm             Show local VM instances' \
+	  '  start-vm            Start and attach; display=gui opens a QEMU window' \
+	  '  attach-vm           Attach to the serial console, with no GUI' \
+	  '  stop-vm             Shut down the selected VM' \
+	  '  teardown-vm         Delete the selected VM and its disk'
 
 setup-host:
 	@$(MAKE) --no-print-directory install-tools
@@ -112,3 +122,18 @@ create-vm: export VM_PASSWORD = $(password)
 create-vm: export VM_PASSWORD_SET = $(if $(filter undefined,$(origin password)),no,yes)
 create-vm:
 	@bash scripts/vm/create-vm.sh $(if $(name),--name="$(name)") $(if $(image),--image="$(image)") $(if $(vcpu),--vcpu="$(vcpu)") $(if $(memory),--memory="$(memory)") $(if $(storage),--storage="$(storage)")
+
+list-vm:
+	@bash scripts/vm/list-vm.sh
+
+attach-vm:
+	@bash scripts/vm/attach-vm.sh $(if $(name),--name="$(name)")
+
+start-vm:
+	@bash scripts/vm/start-vm.sh $(if $(name),--name="$(name)") $(if $(display),--display="$(display)")
+
+stop-vm:
+	@bash scripts/vm/stop-vm.sh $(if $(name),--name="$(name)")
+
+teardown-vm:
+	@bash scripts/vm/teardown-vm.sh $(if $(name),--name="$(name)") $(if $(yes),--yes)
