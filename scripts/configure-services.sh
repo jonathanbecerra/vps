@@ -7,14 +7,18 @@ load_config /etc/vps-setup/host.conf
 action=${1:-configure}
 stack=${2:-}
 caddy_only=no
+vpn_only=no
+reconfigure_caddy=no
 if [[ $action == configure ]]; then
   shift
   while (($#)); do
     case $1 in
       --enable-caddy) CADDY_MODE=docker ;;
       --caddy-only) caddy_only=yes ;;
+      --vpn-only) vpn_only=yes ;;
+      --reconfigure-caddy) reconfigure_caddy=yes ;;
       --vpn=*) VPN=${1#*=} ;;
-      *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME]' ;;
+      *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME] [--caddy-only|--vpn-only] [--reconfigure-caddy]' ;;
     esac
     shift
   done
@@ -111,7 +115,7 @@ if [[ $caddy_only == no && $VPN == wireguard && -z $WG_ENDPOINT ]]; then
   ask WG_ENDPOINT 'WireGuard public IPv4 address or DNS name'
 fi
 validate_config
-if [[ $CADDY_MODE != docker && -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
+if [[ $vpn_only == no && $CADDY_MODE != docker && -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
   die 'Stop Caddy before disabling it.'
 fi
 if [[ $caddy_only == no && $VPN != tailscale ]] && [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-tailscale) ]]; then
@@ -150,17 +154,21 @@ ask_caddy_site() {
 }
 
 configure_caddy_sites() {
-  local layout index sites_file="$ROOT/.local/caddy-sites.caddy"
+  local layout index replace=no sites_file="$ROOT/.local/caddy-sites.caddy"
   [[ ! -L $sites_file ]] || die "Use a regular file for $sites_file."
-  if [[ -s $sites_file ]]; then
+  if [[ $reconfigure_caddy == yes && -e $sites_file ]]; then
+    ask replace "Replace the saved routes in $sites_file? This overwrites the current site list" no
+    case "$replace" in yes | no) ;; *) die 'Choose yes or no.' ;; esac
+  fi
+  if [[ -s $sites_file && $replace != yes ]]; then
     if grep -Fq 'example.com' "$sites_file"; then
       caddy_pending=yes
-      note "Replace example hosts in $sites_file, then run make configure-caddy."
+      note "Finish editing $sites_file, then run make configure-services."
       return
     fi
     if ! grep -Eq '^[[:space:]]*(reverse_proxy[[:space:]]+|file_server([[:space:]]|$))' "$sites_file"; then
       caddy_pending=yes
-      note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-caddy."
+      note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-services."
       return
     fi
     note "Using saved Caddy routes from $sites_file."
@@ -176,7 +184,7 @@ configure_caddy_sites() {
       install -o "$ADMIN_USER" -g "$admin_group" -m 0644 \
         "$ROOT/stacks/caddy/caddy-sites-example.caddy" "$sites_file"
       caddy_pending=yes
-      note "Edit $sites_file in vim, replace the example hosts and upstreams, then run make configure-caddy."
+      note "Edit $sites_file in vim, replace the example hosts and upstreams, then run make configure-services."
       return
       ;;
     *) die 'Choose single or multiple.' ;;
@@ -197,13 +205,13 @@ configure_caddy_sites() {
   mv "$caddy_sites_tmp" "$sites_file"
   caddy_sites_tmp=
   if [[ $caddy_pending == yes ]]; then
-    note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-caddy."
+    note "Add a reverse_proxy or file_server site to $sites_file, then run make configure-services."
   else
     note 'Caddy route saved.'
   fi
 }
 
-if [[ $CADDY_MODE != none ]]; then
+if [[ $vpn_only == no && $CADDY_MODE != none ]]; then
   step 'Set up Caddy'
   configure_caddy_sites
   if [[ $caddy_pending == no && ! -f $ROOT/.local/caddy.env ]]; then
@@ -225,6 +233,11 @@ if [[ $CADDY_MODE != none ]]; then
   fi
   if [[ $caddy_pending == no ]]; then chown "$ADMIN_USER:$admin_group" "$ROOT/.local/caddy.env"; fi
 fi
+if [[ $vpn_only == no && $caddy_pending == yes ]] &&
+  [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
+  stack=caddy
+  progress 'Stop Caddy until its routes are ready' compose stop caddy
+fi
 
 if [[ $caddy_only == no && $VPN != none ]]; then
   if [[ $VPN == tailscale ]]; then
@@ -242,7 +255,7 @@ for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SE
   printf '%s=%s\n' "$key" "${!key}"
 done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf
-if [[ $CADDY_MODE == docker && $caddy_pending == no ]]; then
+if [[ $vpn_only == no && $CADDY_MODE == docker && $caddy_pending == no ]]; then
   install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /data/www
   ufw allow 80/tcp comment 'Caddy HTTP'
@@ -254,7 +267,7 @@ if [[ $caddy_only == no && $VPN == tailscale ]]; then
   chmod 0600 "$ROOT/.local/tailscale.env"
   install -d -m 0700 /data/tailscale
 fi
-if [[ $CADDY_MODE == docker && $caddy_pending == no ]]; then
+if [[ $vpn_only == no && $CADDY_MODE == docker && $caddy_pending == no ]]; then
   stack=caddy
   apply_stack
 fi
@@ -273,4 +286,4 @@ elif [[ $CADDY_MODE == none && $VPN == none ]]; then
 else
   note 'Services are up. Settings and keys are in /opt/vps/.local.'
 fi
-if [[ $VPN == tailscale ]]; then printf 'Run make login-vpn if Tailscale still needs a login.\n'; fi
+if [[ $caddy_only == no && $VPN == tailscale ]]; then printf 'Run make login-vpn if Tailscale still needs a login.\n'; fi

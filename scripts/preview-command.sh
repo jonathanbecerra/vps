@@ -14,6 +14,8 @@ VPN='none'
 INSTALL_FONT='yes'
 SECURITY_UPDATES='yes'
 CADDY_ONLY=no
+VPN_ONLY=no
+RECONFIGURE_CADDY=no
 if [[ -z ${HOST:-} && -r /etc/vps-setup/host.conf ]]; then load_config /etc/vps-setup/host.conf; fi
 key_file='<public-key-file>'
 if [[ $command == setup-vps ]]; then
@@ -327,31 +329,39 @@ case "$command" in
         case $1 in
           --enable-caddy) CADDY_MODE=docker ;;
           --caddy-only) CADDY_ONLY=yes ;;
+          --vpn-only) VPN_ONLY=yes ;;
+          --reconfigure-caddy) RECONFIGURE_CADDY=yes ;;
           --vpn=*) VPN=${1#*=} ;;
-          *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME]' ;;
+          *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME] [--caddy-only|--vpn-only] [--reconfigure-caddy]' ;;
         esac
         shift
       done
       validate_config
       if [[ $CADDY_ONLY == yes ]]; then
         note 'Configure Caddy only. Leave saved VPN settings alone.'
+      elif [[ $VPN_ONLY == yes ]]; then
+        note "Configure $VPN only. Leave saved Caddy settings alone."
       else
-        note "Apply configured services: Caddy=$CADDY_MODE, VPN=$VPN. Set vpn= on make configure-services to change it."
+        note "Configure saved services in order: Caddy=$CADDY_MODE, VPN=$VPN."
       fi
       note 'Check for conflicting services. Stop if a mode change would leave one running.'
-      if [[ $CADDY_MODE != none ]]; then
+      if [[ $VPN_ONLY == no && $CADDY_MODE != none ]]; then
+        if [[ $RECONFIGURE_CADDY == yes ]]; then
+          note 'If the route file exists, ask before replacing it. Yes starts the route setup again; no keeps the saved routes.'
+        fi
         note 'Choose one app or multiple apps on first setup. Single-app upstream is optional.'
         note 'Multiple apps copy stacks/caddy/caddy-sites-example.caddy to /opt/vps/.local/caddy-sites.caddy for editing.'
-        note 'Run make configure-caddy after routes have hostnames and upstreams.'
+        note 'Run make configure-services after editing routes to apply them.'
         note 'Ask for a Cloudflare token with Zone Read and DNS Edit access to the site zones.'
         note 'Reject placeholder token input before starting Caddy.'
         note 'Save the hidden token in /opt/vps/.local/caddy.env with mode 0600.'
         note 'Only open the firewall and start Caddy after routes are ready.'
+        note 'Stop an already running Caddy container if the replacement routes still need editing.'
         note "Create /data/www owned by $ADMIN_USER and mount it read-only at /srv for static sites."
         run install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
         for port in 80/tcp 443/tcp 443/udp; do run ufw allow "$port"; done
       fi
-      if [[ $VPN != none ]]; then
+      if [[ $CADDY_ONLY == no && $VPN != none ]]; then
         if [[ $VPN == tailscale ]]; then
           note 'Check /dev/net/tun. Ask for a Tailscale key if no env file exists; Enter can use browser login.'
           note 'Save /opt/vps/.local/tailscale.env with mode 0600.'
@@ -373,11 +383,11 @@ case "$command" in
       fi
       note 'Save choices in /etc/vps-setup/host.conf.'
       action=apply
-      if [[ $CADDY_MODE == docker ]]; then
+      if [[ $VPN_ONLY == no && $CADDY_MODE == docker ]]; then
         stack=caddy
         preview_stack
       fi
-      if [[ $VPN == tailscale ]]; then
+      if [[ $CADDY_ONLY == no && $VPN == tailscale ]]; then
         stack=$VPN
         preview_stack
       fi

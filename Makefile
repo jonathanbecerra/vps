@@ -3,7 +3,7 @@ export DRY_RUN HOST STACK
 .PHONY: help
 .PHONY: check-editor check-repo install-dotfiles install-packages install-tools setup-host update-system
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-caddy configure-services login-vpn lock-images pull-stack show-logs show-status verify-images
+.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn lock-images pull-stack show-logs show-status verify-images
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
 
@@ -36,7 +36,9 @@ help:
 	  '' \
 	  'Services:' \
 	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
-	  '  configure-services  Apply saved service choices; vpn= selects Tailscale or WireGuard' \
+	  '  configure-services  Configure saved Caddy and VPN choices in order' \
+	  '  configure-tailscale Configure only Tailscale' \
+	  '  configure-wireguard Configure only WireGuard' \
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
 	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
 	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
@@ -100,10 +102,16 @@ verify-images:
 	@bash scripts/lock-images.sh verify
 
 configure-caddy:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure --enable-caddy --caddy-only
+	@bash scripts/run-root.sh scripts/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
 
 configure-services:
 	@bash scripts/run-root.sh scripts/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
+
+configure-tailscale:
+	@bash scripts/run-root.sh scripts/configure-services.sh configure --vpn=tailscale --vpn-only
+
+configure-wireguard:
+	@bash scripts/run-root.sh scripts/configure-services.sh configure --vpn=wireguard --vpn-only
 
 apply-stack:
 	@bash scripts/apply-stack.sh
