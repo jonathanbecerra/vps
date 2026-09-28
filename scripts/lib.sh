@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export ROOT
+WG_ENDPOINT=
+C_RESET='' C_CYAN='' C_GREEN='' C_RED=''
+if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
+  C_RESET=$'\033[0m'
+  C_CYAN=$'\033[36m'
+  C_GREEN=$'\033[32m'
+  C_RED=$'\033[31m'
+fi
+if [[ $(uname -s) == Linux && ${DRY_RUN:-0} != 1 ]]; then
+  export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+fi
+trap 'printf "Stopped at %s:%s. See the error above.\n" "${BASH_SOURCE[0]}" "$LINENO" >&2' ERR
+
+die() {
+  printf '%sError:%s %s\n' "$C_RED" "$C_RESET" "$*" >&2
+  exit 1
+}
+note() { printf '\n%s%s%s\n' "$C_CYAN" "$*" "$C_RESET"; }
+
+begin() {
+  if [[ ${DRY_RUN:-0} != 1 && ${VPS_NO_CLEAR:-0} != 1 && -t 1 && ${TERM:-dumb} != dumb ]]; then
+    printf '\033[H\033[2J'
+  fi
+  note "$1"
+}
+
+step() { printf '\n%s›%s %s\n' "$C_CYAN" "$C_RESET" "$*"; }
+
+progress() {
+  local label=$1 log status frame=0 pid
+  # Braille frames work in the terminals used for SSH and the local console.
+  local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴')
+  shift
+  step "$label"
+  if [[ ${DRY_RUN:-0} == 1 ]]; then
+    run "$@"
+    return
+  fi
+  if [[ ! -t 1 || ${TERM:-dumb} == dumb ]]; then
+    "$@"
+    printf 'Done: %s\n' "$label"
+    return
+  fi
+
+  log=$(mktemp)
+  "$@" >"$log" 2>&1 &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    printf '\r\033[K%s%s%s %s' "$C_CYAN" "${frames[frame]}" "$C_RESET" "$label"
+    sleep 0.12
+    frame=$(((frame + 1) % ${#frames[@]}))
+  done
+  if wait "$pid"; then
+    printf '\r\033[K%s✓%s %s\n' "$C_GREEN" "$C_RESET" "$label"
+    rm -f "$log"
+  else
+    status=$?
+    printf '\r\033[K%s✗%s %s\n' "$C_RED" "$C_RESET" "$label" >&2
+    cat "$log" >&2
+    rm -f "$log"
+    return "$status"
+  fi
+}
+
+setup_lock() {
+  exec 9>/run/vps-setup.lock
+  flock -n 9 || die 'Another setup step is running.'
+  trap release_setup_lock EXIT
+}
+
+release_setup_lock() {
+  flock -u 9 || true
+}
+
+case ${DRY_RUN:-0} in 0 | 1) ;; *) die 'DRY_RUN must be 0 or 1.' ;; esac
+
+preview_if_requested() {
+  [[ ${DRY_RUN:-0} == 1 ]] || return 0
+  exec bash "$ROOT/scripts/preview-command.sh" "$@"
+}
+
+run() {
+  if [[ ${DRY_RUN:-0} == 1 ]]; then
+    printf '  $'
+    printf ' %q' "$@"
+    printf '\n'
+  else
+    "$@"
+  fi
+}
+
+require_root() {
+  [[ $(uname -s) == Linux ]] || die 'Run this on the Linux box.'
+  [[ $EUID == 0 ]] || die 'Run this with sudo.'
+  [[ -d /run/systemd/system ]] || die 'This needs systemd running.'
+}
+
+detect_os() {
+  # shellcheck source=/dev/null
+  source /etc/os-release
+  [[ $ID == ubuntu ]] || die "Found $ID. This setup supports Ubuntu."
+  [[ -n ${VERSION_CODENAME:-} ]] || die 'No distro codename in /etc/os-release.'
+  case "$(uname -m)" in
+    x86_64 | aarch64) ARCH=$(uname -m) ;;
+    *) die 'Use a 64-bit OS, x86_64 or aarch64.' ;;
+  esac
+  export ARCH VERSION_CODENAME
+}
+
+ask() {
+  local variable=$1 label=$2 default=${3:-} reply
+  [[ -t 0 ]] || die 'Run this in a terminal. Use ssh -t for a remote command.'
+  read -r -p "$label${default:+ [$default]}: " reply
+  printf -v "$variable" '%s' "${reply:-$default}"
+}
+
+confirm() {
+  local answer
+  ask answer "$1 Type yes" no
+  [[ $answer == yes ]] || die 'Cancelled.'
+}
+
+ask_secret() {
+  local variable=$1 label=$2 reply
+  [[ -t 0 ]] || die 'Run this from a terminal so the key stays hidden.'
+  read -rs -p "$label: " reply
+  printf '\n'
+  printf -v "$variable" '%s' "$reply"
+}
+
+# shellcheck disable=SC2034
+find_compose() {
+  if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose)
+  elif command -v docker-compose >/dev/null; then
+    COMPOSE=(docker-compose)
+  else
+    die 'Install Docker Compose first.'
+  fi
+}
+
+load_config() {
+  local file=$1 key value
+  [[ -f $file ]] || die "Config not found: $file"
+  while IFS='=' read -r key value || [[ -n $key ]]; do
+    [[ -z $key || $key == \#* ]] && continue
+    case "$key" in
+      SERVER_HOSTNAME | ADMIN_USER | CADDY_MODE | VPN | WG_ENDPOINT | INSTALL_FONT | SECURITY_UPDATES)
+        printf -v "$key" '%s' "$value"
+        ;;
+      SERVICES_CONFIGURED) ;;
+      *) die "Unknown config key: $key" ;;
+    esac
+  done <"$file"
+}
+
+validate_config() {
+  [[ ${SERVER_HOSTNAME:-} =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die 'Use a short hostname, lowercase letters, numbers, and hyphens.'
+  [[ ${ADMIN_USER:-} =~ ^[a-z_][a-z0-9_-]{0,30}$ && $ADMIN_USER != root ]] || die 'Pick a regular Linux username, not root.'
+  case "${CADDY_MODE:-}" in docker | none) ;; *) die 'CADDY_MODE must be docker or none.' ;; esac
+  case "${VPN:-}" in tailscale | wireguard | none) ;; *) die 'VPN must be tailscale, wireguard, or none.' ;; esac
+  if [[ $VPN == wireguard && -n $WG_ENDPOINT ]]; then
+    [[ $WG_ENDPOINT =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ && $WG_ENDPOINT != *..* ]] ||
+      die 'Set WG_ENDPOINT to a public IPv4 address or DNS name.'
+  fi
+  case "${INSTALL_FONT:-}:${SECURITY_UPDATES:-}" in yes:yes | yes:no | no:yes | no:no) ;; *) die 'Use yes or no for INSTALL_FONT and SECURITY_UPDATES.' ;; esac
+}
+
+read_packages() {
+  local file=$1 package
+  PACKAGES=()
+  [[ -f $file ]] || die "Package list not found: $file"
+  while IFS= read -r package || [[ -n $package ]]; do
+    package=${package%%#*}
+    package="${package#"${package%%[![:space:]]*}"}"
+    package="${package%"${package##*[![:space:]]}"}"
+    [[ -z $package ]] && continue
+    [[ $package =~ ^[a-z0-9][a-z0-9+._-]*$ ]] || die "Invalid package name: $package"
+    PACKAGES+=("$package")
+  done <"$file"
+}
+
+install_packages() {
+  (($#)) || return 0
+  progress 'Install Ubuntu packages' env DEBIAN_FRONTEND=noninteractive apt-get \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y --no-install-recommends "$@"
+}
+
+upgrade_os() {
+  progress 'Refresh Ubuntu package list' apt-get update
+  progress 'Apply Ubuntu updates' env DEBIAN_FRONTEND=noninteractive apt-get \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y
+}
+
+read_setup_packages() {
+  read_packages "$1"
+  system_packages=()
+  binary_packages=()
+  local package
+  for package in "${PACKAGES[@]}"; do
+    case "$package" in
+      lazygit | lazydocker | yq | glow | eza | deja | nvim) binary_packages+=("$package") ;;
+      *) system_packages+=("$package") ;;
+    esac
+  done
+  [[ $INSTALL_FONT != yes ]] || binary_packages+=(jetbrains-mono)
+}
+
+backup() {
+  [[ -e $1 || -L $1 ]] || return 0
+  local destination
+  destination="/var/backups/vps-setup/$(date +%Y%m%d-%H%M%S)-$$$1"
+  install -d -m 0700 "$(dirname "$destination")"
+  cp -a "$1" "$destination"
+}
+
+render() {
+  local source=$1 destination=$2 temporary
+  shift 2
+  temporary=$(mktemp)
+  # Limit substitution so literal dollars in config files survive.
+  # shellcheck disable=SC2016
+  envsubst "$(printf '${%s} ' "$@")" <"$source" >"$temporary"
+  backup "$destination"
+  install -D -m 0644 "$temporary" "$destination"
+  rm -f "$temporary"
+}
+
+ssh_service() {
+  if systemctl is-active --quiet ssh.service; then printf 'ssh\n'; else printf 'sshd\n'; fi
+}
+
+ssh_ports() {
+  local socket
+  {
+    /usr/sbin/sshd -T | awk '$1 == "port" {print $2}'
+    # Socket activation can listen on a different port than sshd_config.
+    for socket in ssh.socket sshd.socket; do
+      if systemctl is-active --quiet "$socket"; then
+        systemctl show "$socket" -p Listen --value | awk '{for (i=1; i<=NF; i++) if ($(i+1) == "(Stream)") {sub(/^.*:/, "", $i); print $i}}'
+      fi
+    done
+    if [[ -n ${SSH_CONNECTION:-} ]]; then printf '%s\n' "${SSH_CONNECTION##* }"; fi
+  } | sort -un
+}
+
+set_hosts_entry() {
+  local file=$1 hostname=$2 temporary
+  temporary=$(mktemp)
+  awk -v hostname="$hostname" '
+    $1 == "127.0.1.1" { if (!seen++) print "127.0.1.1\t" hostname; next }
+    { print }
+    END { if (!seen) print "127.0.1.1\t" hostname }
+  ' "$file" >"$temporary"
+  cat "$temporary" >"$file"
+  rm -f "$temporary"
+}

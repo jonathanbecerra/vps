@@ -1,0 +1,9 @@
+.local/
+.image-lock.*/
+*.pem
+*.key
+.env
+*.env.*
+!.env.example
+.DS_Store
+AGENTS.md

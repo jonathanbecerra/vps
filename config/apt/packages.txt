@@ -1,0 +1,9 @@
+# Ubuntu packages needed for the first login.
+ca-certificates
+ncurses-bin
+openssh-client
+openssh-server
+rsync
+sudo
+util-linux
+zsh
