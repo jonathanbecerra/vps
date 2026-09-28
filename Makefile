@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
 .PHONY: help
-.PHONY: check-editor install-dotfiles install-packages install-tools setup-host update-system
+.PHONY: check-editor check-repo install-dotfiles install-packages install-tools setup-host update-system
 .PHONY: confirm-ssh configure-ssh rollback-ssh
 .PHONY: apply-stack build-caddy configure-services login-vpn lock-images pull-stack show-logs show-status verify-images
 .PHONY: deploy-stack preview-deploy sync-repo
@@ -22,6 +22,7 @@ help:
 	  '  setup-host          Install tools, link configs, and enter zsh' \
 	  '  install-dotfiles    Link configs and enter zsh' \
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
+	  '  check-repo          Check scripts and configuration' \
 	  '  install-packages    Install Ubuntu packages from config/apt/packages.txt' \
 	  '  install-tools       Install pinned tools from config/apt/binaries.tsv' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
@@ -62,6 +63,9 @@ install-dotfiles:
 
 check-editor:
 	@bash scripts/check-editor.sh
+
+check-repo:
+	@bash scripts/check-repo.sh
 
 # Confirm from a fresh key login before the rollback timer expires.
 configure-ssh:
