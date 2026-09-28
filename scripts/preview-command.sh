@@ -229,7 +229,6 @@ case "$command" in
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
     upgrade_os
     install_packages "${system_packages[@]}"
-    run tic -x -o /usr/share/terminfo "$ROOT/config/terminfo/xterm-ghostty.terminfo"
     note 'Back up /etc/hosts and set its 127.0.1.1 entry. Create the admin if missing.'
     run useradd --create-home --shell /bin/zsh "$ADMIN_USER"
     printf '  Merge public keys into /home/%s/.ssh/authorized_keys (0600).\n' "$ADMIN_USER"

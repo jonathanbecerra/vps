@@ -91,7 +91,6 @@ step 'Update Ubuntu and install base packages'
 upgrade_os
 install_packages "${system_packages[@]}"
 # Install system-wide so sudo and new SSH sessions can find it too.
-progress 'Install Ghostty terminal support' tic -x -o /usr/share/terminfo "$ROOT/config/terminfo/xterm-ghostty.terminfo"
 backup /etc/hosts
 set_hosts_entry /etc/hosts "$SERVER_HOSTNAME"
 
