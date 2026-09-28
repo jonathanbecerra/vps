@@ -4,7 +4,6 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/manage-lib.sh"
 parse_vm_args --allow-missing-name "$@"
 load_vm_config
 preview_if_requested vm-teardown
-begin "Remove VM $VM_NAME"
 vm_running && die "Stop $VM_NAME before removing it."
 
 if [[ $VM_YES != yes ]]; then
@@ -14,6 +13,4 @@ if [[ $VM_YES != yes ]]; then
   [[ $answer == yes ]] || die 'Cancelled.'
 fi
 
-step 'Remove VM files'
-rm -rf -- "$VM_DIR"
-note "Removed $VM_NAME."
+progress "Remove VM $VM_NAME" rm -rf -- "$VM_DIR"

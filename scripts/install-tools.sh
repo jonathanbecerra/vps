@@ -7,7 +7,9 @@ detect_os
 load_config /etc/vps-setup/host.conf
 validate_config
 setup_lock
-begin 'Install selected tools and font'
+clear_screen
 read_setup_packages "$ROOT/config/apt/packages.txt"
-step 'Install pinned binaries'
-bash "$ROOT/scripts/install-binaries.sh" "${binary_packages[@]}"
+progress 'Install selected tools and font' bash "$ROOT/scripts/install-binaries.sh" "${binary_packages[@]}"
+for tool in "${binary_packages[@]}"; do
+  printf '  %s✓%s %s\n' "$C_GREEN" "$C_RESET" "$tool"
+done

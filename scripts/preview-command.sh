@@ -244,9 +244,15 @@ case "$command" in
     note 'Pinned tools and the selected font install later with make setup-host.'
     preview_docker
     preview_security
-    note 'Next: keep this session open. From another terminal, log in as the admin with the same key and run: cd /opt/vps && make configure-ssh.'
-    note 'Open a fresh SSH connection within five minutes and run: cd /opt/vps && make confirm-ssh.'
-    note 'Then run make setup-host. Reboot when ready.'
+    note 'SSH HANDOFF'
+    printf 'Keep this session open until key access is confirmed.\n'
+    printf '\n\t%s1.%s In another terminal, log in as %s with the same key:\n' "$C_YELLOW" "$C_RESET" "$ADMIN_USER"
+    printf '\t\t%scd /opt/vps && make configure-ssh%s\n' "$C_YELLOW" "$C_RESET"
+    printf '\n\t%s2.%s Open a fresh SSH connection within five minutes:\n' "$C_YELLOW" "$C_RESET"
+    printf '\t\t%scd /opt/vps && make confirm-ssh%s\n' "$C_YELLOW" "$C_RESET"
+    printf '\n\t%s3.%s Continue in that confirmed session:\n' "$C_YELLOW" "$C_RESET"
+    printf '\t\t%scd /opt/vps && make setup-host%s\n' "$C_YELLOW" "$C_RESET"
+    printf '\t\tReboot when ready.\n'
     ;;
   install-docker) preview_docker ;;
   install-packages)
@@ -274,6 +280,8 @@ case "$command" in
   configure-security) preview_security ;;
   install-tools)
     read_setup_packages "$ROOT/config/apt/packages.txt"
+    note 'Install the selected tools and font in one run.'
+    printf '  %s\n' "${binary_packages[*]}"
     preview_binaries "${binary_packages[@]}"
     ;;
   install-binaries) preview_binaries "$@" ;;

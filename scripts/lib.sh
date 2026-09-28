@@ -3,12 +3,15 @@ set -Eeuo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 export ROOT
 WG_ENDPOINT=
-C_RESET='' C_CYAN='' C_GREEN='' C_RED=''
+C_RESET='' C_CYAN='' C_GREEN='' C_RED='' C_YELLOW=''
 if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
   C_RESET=$'\033[0m'
   C_CYAN=$'\033[36m'
   C_GREEN=$'\033[32m'
   C_RED=$'\033[31m'
+  # Used by setup handoff text in scripts that source this library.
+  # shellcheck disable=SC2034
+  C_YELLOW=$'\033[33m'
 fi
 if [[ $(uname -s) == Linux && ${DRY_RUN:-0} != 1 ]]; then
   export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
@@ -21,10 +24,14 @@ die() {
 }
 note() { printf '\n%s%s%s\n' "$C_CYAN" "$*" "$C_RESET"; }
 
-begin() {
+clear_screen() {
   if [[ ${DRY_RUN:-0} != 1 && ${VPS_NO_CLEAR:-0} != 1 && -t 1 && ${TERM:-dumb} != dumb ]]; then
     printf '\033[H\033[2J'
   fi
+}
+
+begin() {
+  clear_screen
   note "$1"
 }
 
@@ -39,13 +46,21 @@ progress() {
     run "$@"
     return
   fi
+  log=$(mktemp)
   if [[ ! -t 1 || ${TERM:-dumb} == dumb ]]; then
-    "$@"
-    printf 'Done: %s\n' "$label"
-    return
+    if "$@" >"$log" 2>&1; then
+      rm -f "$log"
+      printf 'Done: %s\n' "$label"
+    else
+      status=$?
+      printf 'Failed: %s\n' "$label" >&2
+      cat "$log" >&2
+      rm -f "$log"
+      return "$status"
+    fi
+    return 0
   fi
 
-  log=$(mktemp)
   "$@" >"$log" 2>&1 &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do

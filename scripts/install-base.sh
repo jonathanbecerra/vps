@@ -177,10 +177,12 @@ if [[ $source_repo == "/home/$ADMIN_USER/vps" || $source_repo == /root/vps ]]; t
   note 'The setup repo now lives in /opt/vps. The old checkout was removed.'
 fi
 
-printf '\n%sNEXT%s\n' "$C_CYAN" "$C_RESET"
-printf 'Keep this SSH session open.\n'
-printf '\n1. In another terminal, log in as %s with the same key and run:\n' "$ADMIN_USER"
-printf '   cd /opt/vps && make configure-ssh\n'
-printf '\n2. Open a fresh SSH connection within five minutes, then run:\n'
-printf '   cd /opt/vps && make confirm-ssh\n'
-printf '\n3. Run make setup-host. Reboot when ready.\n'
+printf '\n%sSSH HANDOFF%s\n' "$C_CYAN" "$C_RESET"
+printf 'Keep this session open until key access is confirmed.\n'
+printf '\n\t%s1.%s In another terminal, log in as %s with the same key:\n' "$C_YELLOW" "$C_RESET" "$ADMIN_USER"
+printf '\t\t%scd /opt/vps && make configure-ssh%s\n' "$C_YELLOW" "$C_RESET"
+printf '\n\t%s2.%s Open a fresh SSH connection within five minutes:\n' "$C_YELLOW" "$C_RESET"
+printf '\t\t%scd /opt/vps && make confirm-ssh%s\n' "$C_YELLOW" "$C_RESET"
+printf '\n\t%s3.%s Continue in that confirmed session:\n' "$C_YELLOW" "$C_RESET"
+printf '\t\t%scd /opt/vps && make setup-host%s\n' "$C_YELLOW" "$C_RESET"
+printf '\t\tReboot when ready.\n'
