@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
-.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh deploy-stack install-dotfiles install-packages install-tools login-vpn lock-images preview-deploy pull-stack rollback-ssh setup-host show-logs show-status sync-repo update-system verify-images
+.PHONY: help apply-stack build-caddy check-editor confirm-ssh configure-services configure-ssh create-vm deploy-stack install-dotfiles install-packages install-tools login-vpn lock-images preview-deploy pull-stack rollback-ssh setup-host show-logs show-status sync-repo update-system verify-images
 
 help:
 	@printf '%s\n' \
@@ -37,7 +37,10 @@ help:
 	  'Deployment:' \
 	  '  deploy-stack        Check, preview, sync, and apply (HOST=... STACK=...)' \
 	  '  preview-deploy      Show rsync differences (HOST=...)' \
-	  '  sync-repo           Copy the repo with rsync (HOST=...)'
+	  '  sync-repo           Copy the repo with rsync (HOST=...)' \
+	  '' \
+	  'Local VMs:' \
+	  '  create-vm           Create Ubuntu: make create-vm name=lab vcpu=8 memory=16 storage=64'
 
 setup-host:
 	@$(MAKE) --no-print-directory install-tools
@@ -104,3 +107,8 @@ preview-deploy:
 
 sync-repo:
 	@bash scripts/sync-repo.sh sync
+
+create-vm: export VM_PASSWORD = $(password)
+create-vm: export VM_PASSWORD_SET = $(if $(filter undefined,$(origin password)),no,yes)
+create-vm:
+	@bash scripts/vm/create-vm.sh $(if $(name),--name="$(name)") $(if $(image),--image="$(image)") $(if $(vcpu),--vcpu="$(vcpu)") $(if $(memory),--memory="$(memory)") $(if $(storage),--storage="$(storage)")

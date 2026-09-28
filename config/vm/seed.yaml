@@ -1,0 +1,12 @@
+#cloud-config
+hostname: __VM_NAME__
+manage_etc_hosts: true
+ssh_pwauth: __SSH_PWAUTH__
+users:
+  - name: admin
+    groups: [adm, sudo]
+    no_user_group: true # Ubuntu already has an admin group.
+    shell: /bin/bash
+    hashed_passwd: "__PASSWORD_HASH__"
+    lock_passwd: __LOCK_PASSWD__
+    sudo: ALL=(ALL) ALL
