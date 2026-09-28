@@ -1,12 +1,17 @@
 .DEFAULT_GOAL := help
 export DRY_RUN
-.PHONY: help check-editor install-dotfiles install-packages install-tools setup-host
+.PHONY: help check-editor confirm-ssh configure-ssh install-dotfiles install-packages install-tools rollback-ssh setup-host
 
 help:
 	@printf '%s\n' \
 	  'First boot:' \
 	  '  Run ./setup-vps.sh as root on the Ubuntu box' \
 	  '  ./setup-vps.sh --help' \
+	  '' \
+	  'SSH setup:' \
+	  '  configure-ssh       Require key-only SSH; rollback starts in five minutes' \
+	  '  confirm-ssh         Confirm from a fresh SSH connection' \
+	  '  rollback-ssh        Restore a pending SSH change' \
 	  '' \
 	  'Host tools:' \
 	  '  setup-host          Install tools, link configs, and enter zsh' \
@@ -24,6 +29,16 @@ install-dotfiles:
 
 check-editor:
 	@bash scripts/check-editor.sh
+
+# Confirm from a fresh key login before the rollback timer expires.
+configure-ssh:
+	@bash scripts/run-root.sh scripts/configure-ssh.sh harden
+
+confirm-ssh:
+	@bash scripts/run-root.sh scripts/configure-ssh.sh confirm
+
+rollback-ssh:
+	@bash scripts/run-root.sh scripts/rollback-ssh.sh
 
 install-packages:
 	@bash scripts/run-root.sh scripts/install-packages.sh

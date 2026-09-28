@@ -141,4 +141,7 @@ if [[ $source_repo == "/home/$ADMIN_USER/vps" || $source_repo == /root/vps ]]; t
 fi
 
 note 'Base setup is done. Keep this SSH session open.'
-printf 'Log in as %s with the same SSH key before closing this session.\n' "$ADMIN_USER"
+printf 'Open another terminal, log in with a key as %s, then run:\n' "$ADMIN_USER"
+printf '  cd /opt/vps\n  make configure-ssh\n'
+printf 'Open a fresh SSH connection and run make confirm-ssh within five minutes.\n'
+printf 'Then run make setup-host. Reboot when ready.\n'
