@@ -35,7 +35,6 @@ progress() {
   # Braille frames work in the terminals used for SSH and the local console.
   local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴')
   shift
-  step "$label"
   if [[ ${DRY_RUN:-0} == 1 ]]; then
     run "$@"
     return

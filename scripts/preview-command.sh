@@ -223,9 +223,11 @@ case "$command" in
     ;;
   setup-vps)
     read_setup_packages "$ROOT/config/apt/packages.txt"
-    note "Preview values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, font=$INSTALL_FONT."
-    note 'Choose Caddy docker or none, and VPN tailscale, wireguard, or none. Save both in host.conf.'
+    note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
+    note "JetBrains Mono=$INSTALL_FONT, automatic security updates=$SECURITY_UPDATES."
+    note 'Choose Caddy yes or no during setup; Docker and VPN choices are applied later with make configure-services.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
+    note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
     upgrade_os
     install_packages "${system_packages[@]}"
@@ -242,7 +244,9 @@ case "$command" in
     note 'Pinned tools and the selected font install later with make setup-host.'
     preview_docker
     preview_security
-    note 'Next: connect as the admin, configure-ssh, then confirm-ssh from a new connection.'
+    note 'Next: keep this session open. From another terminal, log in as the admin with the same key and run: cd /opt/vps && make configure-ssh.'
+    note 'Open a fresh SSH connection within five minutes and run: cd /opt/vps && make confirm-ssh.'
+    note 'Then run make setup-host. Reboot when ready.'
     ;;
   install-docker) preview_docker ;;
   install-packages)

@@ -38,7 +38,19 @@ SECURITY_UPDATES=yes
 begin 'Set up this Ubuntu box'
 ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
 ask ADMIN_USER 'Admin username' "$ADMIN_USER"
-ask CADDY_MODE 'Run Caddy? docker or none' "$CADDY_MODE"
+caddy_default=no
+case "$CADDY_MODE" in
+  docker) caddy_default=yes ;;
+  none) ;;
+  *) die 'CADDY_MODE must be docker or none.' ;;
+esac
+caddy_choice=$caddy_default
+ask caddy_choice 'Set up Caddy in Docker? yes or no' "$caddy_default"
+case "$caddy_choice" in
+  yes) CADDY_MODE=docker ;;
+  no) CADDY_MODE=none ;;
+  *) die 'Choose yes or no for Caddy.' ;;
+esac
 ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
 ask INSTALL_FONT 'Install JetBrains Mono Nerd Font? yes or no' "$INSTALL_FONT"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
@@ -74,9 +86,17 @@ if [[ ! -f /etc/vps-setup/host.conf ]] && command -v docker >/dev/null && docker
   [[ -z $(docker ps -aq) ]] || die 'This host already has containers. Back up and migrate them before first-time provisioning.'
 fi
 
-printf '\nHost: %s\nAdmin: %s\n' "$SERVER_HOSTNAME" "$ADMIN_USER"
-printf 'The OS gets updated; Docker, UFW, fail2ban, and automatic updates are configured.\n'
-printf 'The admin account gets the public key and sudo access.\n'
+printf '\n%sReview setup%s\n' "$C_CYAN" "$C_RESET"
+printf '  %-18s %s\n' 'Hostname' "$SERVER_HOSTNAME"
+printf '  %-18s %s\n' 'Admin' "$ADMIN_USER"
+if [[ $CADDY_MODE == docker ]]; then caddy_summary=Docker; else caddy_summary=Off; fi
+printf '  %-18s %s\n' 'Caddy' "$caddy_summary"
+printf '  %-18s %s\n' 'VPN' "$VPN"
+printf '  %-18s %s\n' 'JetBrains Mono' "$INSTALL_FONT"
+printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
+printf '  %-18s %s\n' 'Public key' "$key_file"
+printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
+printf '  Caddy and VPN choices are saved for make configure-services.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
 
@@ -84,59 +104,72 @@ export VPS_NO_CLEAR=1
 saved_keys=$(mktemp)
 trap 'rm -f "$saved_keys"; release_setup_lock' EXIT
 cp "$key_file" "$saved_keys"
-step 'Set the hostname'
-hostnamectl set-hostname "$SERVER_HOSTNAME"
 
-step 'Update Ubuntu and install base packages'
-upgrade_os
-install_packages "${system_packages[@]}"
-# Install system-wide so sudo and new SSH sessions can find it too.
-backup /etc/hosts
-set_hosts_entry /etc/hosts "$SERVER_HOSTNAME"
+configure_host() {
+  # The setup lock belongs to the parent while this function runs under the spinner.
+  [[ $BASHPID == "$setup_pid" ]] || trap - EXIT
+  step 'Set the hostname'
+  hostnamectl set-hostname "$SERVER_HOSTNAME"
 
-step 'Set up the admin account'
-if ! id "$ADMIN_USER" &>/dev/null; then useradd --create-home --shell /bin/zsh "$ADMIN_USER"; fi
-user_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
-admin_group=$(id -gn "$ADMIN_USER")
-[[ $user_home == /home/* && -d $user_home ]] || die 'Expected the admin home under /home/.'
-install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 "$user_home/.ssh"
-authorized_keys="$user_home/.ssh/authorized_keys"
-backup "$authorized_keys"
-touch "$authorized_keys"
-merged_keys=$(awk '!seen[$0]++' "$authorized_keys" "$saved_keys")
-# printf restores the final newline even when the old file had none.
-printf '%s\n' "$merged_keys" >"$authorized_keys"
-chown "$ADMIN_USER:$admin_group" "$authorized_keys"
-chmod 0600 "$authorized_keys"
-render "$ROOT/config/sudo/admin" /etc/sudoers.d/90-vps-admin ADMIN_USER
-chmod 0440 /etc/sudoers.d/90-vps-admin
-visudo -cf /etc/sudoers.d/90-vps-admin
-if [[ $(passwd -S "$ADMIN_USER" | awk '{print $2}') != P ]]; then
-  note "Set a sudo password for $ADMIN_USER."
-  passwd "$ADMIN_USER"
-fi
-usermod -s "$(command -v zsh)" "$ADMIN_USER"
-if [[ ! -e $user_home/.zshrc ]]; then
-  install -o "$ADMIN_USER" -g "$admin_group" -m 0644 /dev/null "$user_home/.zshrc"
-fi
+  step 'Update Ubuntu and install base packages'
+  upgrade_os
+  install_packages "${system_packages[@]}"
+  # Install system-wide so sudo and new SSH sessions can find it too.
+  backup /etc/hosts
+  set_hosts_entry /etc/hosts "$SERVER_HOSTNAME"
 
-step 'Set up /opt/vps and /data'
-install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
-install -d -m 0700 /data/backups /var/backups/vps-setup
-[[ ! -L /opt/vps ]] || die '/opt/vps must be a directory, not a symlink.'
-install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /opt/vps
-if [[ $ROOT != /opt/vps ]]; then
-  rsync -a --filter="merge $ROOT/.rsyncignore" "$ROOT/" /opt/vps/
-fi
-chown -R "$ADMIN_USER:$admin_group" /opt/vps
-install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 /opt/vps/.local
-for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
-  printf '%s=%s\n' "$key" "${!key}"
-done >/etc/vps-setup/host.conf
-chmod 0644 /etc/vps-setup/host.conf
+  step 'Set up the admin account'
+  if ! id "$ADMIN_USER" &>/dev/null; then useradd --create-home --shell /bin/zsh "$ADMIN_USER"; fi
+  user_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
+  admin_group=$(id -gn "$ADMIN_USER")
+  [[ $user_home == /home/* && -d $user_home ]] || die 'Expected the admin home under /home/.'
+  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 "$user_home/.ssh"
+  authorized_keys="$user_home/.ssh/authorized_keys"
+  backup "$authorized_keys"
+  touch "$authorized_keys"
+  merged_keys=$(awk '!seen[$0]++' "$authorized_keys" "$saved_keys")
+  # printf restores the final newline even when the old file had none.
+  printf '%s\n' "$merged_keys" >"$authorized_keys"
+  chown "$ADMIN_USER:$admin_group" "$authorized_keys"
+  chmod 0600 "$authorized_keys"
+  render "$ROOT/config/sudo/admin" /etc/sudoers.d/90-vps-admin ADMIN_USER
+  chmod 0440 /etc/sudoers.d/90-vps-admin
+  visudo -cf /etc/sudoers.d/90-vps-admin
+  if [[ $(passwd -S "$ADMIN_USER" | awk '{print $2}') != P ]]; then
+    note "Set a sudo password for $ADMIN_USER."
+    passwd "$ADMIN_USER"
+  fi
+  usermod -s "$(command -v zsh)" "$ADMIN_USER"
+  if [[ ! -e $user_home/.zshrc ]]; then
+    install -o "$ADMIN_USER" -g "$admin_group" -m 0644 /dev/null "$user_home/.zshrc"
+  fi
 
-progress 'Install Docker and Compose' bash "$ROOT/scripts/install-docker.sh"
-bash "$ROOT/scripts/configure-security.sh"
+  step 'Set up /opt/vps and /data'
+  install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
+  install -d -m 0700 /data/backups /var/backups/vps-setup
+  [[ ! -L /opt/vps ]] || die '/opt/vps must be a directory, not a symlink.'
+  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /opt/vps
+  if [[ $ROOT != /opt/vps ]]; then
+    rsync -a --filter="merge $ROOT/.rsyncignore" "$ROOT/" /opt/vps/
+  fi
+  chown -R "$ADMIN_USER:$admin_group" /opt/vps
+  install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 /opt/vps/.local
+  for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
+    printf '%s=%s\n' "$key" "${!key}"
+  done >/etc/vps-setup/host.conf
+  chmod 0644 /etc/vps-setup/host.conf
+
+  progress 'Install Docker and Compose' bash "$ROOT/scripts/install-docker.sh"
+  bash "$ROOT/scripts/configure-security.sh"
+}
+
+setup_pid=$BASHPID
+progress "Set up $SERVER_HOSTNAME" configure_host
+printf '\n  %s✓%s Hostname and hosts file\n' "$C_GREEN" "$C_RESET"
+printf '  %s✓%s Ubuntu packages and updates\n' "$C_GREEN" "$C_RESET"
+printf '  %s✓%s Admin account, sudo, and SSH key\n' "$C_GREEN" "$C_RESET"
+printf '  %s✓%s /opt/vps and /data\n' "$C_GREEN" "$C_RESET"
+printf '  %s✓%s Docker, UFW, fail2ban, and update policy\n' "$C_GREEN" "$C_RESET"
 
 source_repo=$(realpath "$ROOT")
 if [[ $source_repo == "/home/$ADMIN_USER/vps" || $source_repo == /root/vps ]]; then
@@ -144,8 +177,10 @@ if [[ $source_repo == "/home/$ADMIN_USER/vps" || $source_repo == /root/vps ]]; t
   note 'The setup repo now lives in /opt/vps. The old checkout was removed.'
 fi
 
-note 'Base setup is done. Keep this SSH session open.'
-printf 'Open another terminal, log in with a key as %s, then run:\n' "$ADMIN_USER"
-printf '  cd /opt/vps\n  make configure-ssh\n'
-printf 'Open a fresh SSH connection and run make confirm-ssh within five minutes.\n'
-printf 'Then run make setup-host. Reboot when ready.\n'
+printf '\n%sNEXT%s\n' "$C_CYAN" "$C_RESET"
+printf 'Keep this SSH session open.\n'
+printf '\n1. In another terminal, log in as %s with the same key and run:\n' "$ADMIN_USER"
+printf '   cd /opt/vps && make configure-ssh\n'
+printf '\n2. Open a fresh SSH connection within five minutes, then run:\n'
+printf '   cd /opt/vps && make confirm-ssh\n'
+printf '\n3. Run make setup-host. Reboot when ready.\n'
