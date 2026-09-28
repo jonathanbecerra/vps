@@ -1,12 +1,10 @@
-ARG CADDY_BUILDER_IMAGE
-ARG CADDY_RUNTIME_IMAGE
-
-FROM ${CADDY_BUILDER_IMAGE} AS builder
+# Compose cannot lock FROM images, so keep these base digests pinned here.
+FROM docker.io/library/caddy:2.11.4-builder@sha256:369218c81ca6d6af249981221b3a5c764d886dd5b058f51d144066de13f2418d AS builder
 ARG CADDY_VERSION=2.11.4
 
 RUN CGO_ENABLED=0 xcaddy build v${CADDY_VERSION} \
     --with github.com/caddy-dns/cloudflare@v0.2.4
 
-FROM ${CADDY_RUNTIME_IMAGE}
+FROM docker.io/library/caddy:2.11.4@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 RUN caddy list-modules | grep -Fx dns.providers.cloudflare

@@ -1,6 +1,6 @@
-name: vps-caddy
 services:
   caddy:
+    profiles: [caddy]
     build:
       context: .
       dockerfile: Dockerfile

@@ -18,16 +18,15 @@ jq -e . config/docker/daemon.json config/nvim/lazy-lock.json >/dev/null
 bash scripts/vm/list-vm.sh >/dev/null
 docker_key_fingerprint=$(tr -d '[:space:]' <config/docker/docker-key-fingerprint.txt)
 [[ $docker_key_fingerprint =~ ^[[:xdigit:]]{40}$ ]] || die 'Docker key fingerprint must be 40 hexadecimal characters.'
-if command -v docker >/dev/null || command -v docker-compose >/dev/null; then
+grep -Eq '^FROM docker.io/library/caddy:[^[:space:]]+@sha256:[a-f0-9]{64} AS builder$' stacks/caddy/Dockerfile ||
+  die 'Pin the Caddy builder image digest in stacks/caddy/Dockerfile.'
+grep -Eq '^FROM docker.io/library/caddy:[^[:space:]]+@sha256:[a-f0-9]{64}$' stacks/caddy/Dockerfile ||
+  die 'Pin the Caddy runtime image digest in stacks/caddy/Dockerfile.'
+if { command -v docker >/dev/null && docker compose version >/dev/null 2>&1; } || command -v docker-compose >/dev/null; then
   find_compose
-  for stack in caddy tailscale; do
-    jq -e 'all(.services[];
-      if .build then all(.build.args[]; test("@sha256:[a-f0-9]{64}$"))
-      else .image | test("@sha256:[a-f0-9]{64}$") end
-    )' "stacks/$stack/compose.lock.json" >/dev/null
-    "${COMPOSE[@]}" --env-file .env.example -f "stacks/$stack/compose.yaml" \
-      -f "stacks/$stack/compose.lock.json" config --quiet
-  done
+  grep -Eq '@sha256:[a-f0-9]{64}$' stacks/compose.lock.yaml || die 'Compose lock needs image digests.'
+  "${COMPOSE[@]}" --env-file .env.example -f stacks/compose.yaml --profile caddy --profile tailscale \
+    -f stacks/compose.lock.yaml config --quiet
 else
   printf 'Skipping Compose checks. Install Docker Compose to run them.\n'
 fi

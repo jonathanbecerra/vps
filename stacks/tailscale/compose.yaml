@@ -1,11 +1,12 @@
-name: vps-tailscale
 services:
   tailscale:
     image: docker.io/tailscale/tailscale:v1.102.4
+    profiles: [tailscale]
     restart: unless-stopped
     network_mode: host
     environment:
-      TS_HOSTNAME: ${VPN_HOSTNAME:?Set VPN_HOSTNAME in .local/tailscale.env}
+      TZ: ${TZ:-America/New_York}
+      TS_HOSTNAME: ${VPN_HOSTNAME:-preview}
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
       TS_STATE_DIR: /var/lib/tailscale

@@ -27,11 +27,6 @@ validate_config
 begin 'Configure services'
 export VPS_NO_CLEAR=1
 
-compose() {
-  docker compose --env-file "$ROOT/.local/$stack.env" \
-    -f "$ROOT/stacks/$stack/compose.yaml" -f "$ROOT/stacks/$stack/compose.lock.json" "$@"
-}
-
 check_stack() {
   case "$stack" in
     caddy) [[ $CADDY_MODE == docker ]] || die 'Caddy is off. Run make configure-caddy to start it.' ;;
@@ -42,26 +37,27 @@ check_stack() {
     [[ $stack != caddy ]] || die 'Run make configure-caddy on the host first.'
     die 'Run make configure-services on the host first.'
   fi
-  [[ -f $ROOT/stacks/$stack/compose.lock.json ]] || die "Run make lock-images STACK=$stack first."
+  [[ -f $ROOT/stacks/compose.lock.yaml ]] || die 'Run make lock-images first.'
 }
 
 apply_stack() {
   check_stack
-  progress "Check $stack compose file" compose config --quiet
+  remove_legacy_compose "$stack"
+  progress "Check $stack compose file" compose --profile "$stack" config --quiet
   if [[ $stack == caddy ]]; then
     progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/build-caddy.sh"
-    progress 'Validate Caddy configuration' compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+    progress 'Validate Caddy configuration' compose --profile caddy run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
   else
-    progress 'Verify pinned Tailscale image' env STACK="$stack" bash "$ROOT/scripts/lock-images.sh" verify
+    progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/lock-images.sh" verify
   fi
   if [[ $stack == caddy ]]; then
-    progress 'Start Caddy' compose up -d --no-build --force-recreate --wait --wait-timeout 90
+    progress 'Start Caddy' compose --profile caddy up -d --no-build --force-recreate --wait --wait-timeout 90 caddy
   else
-    progress 'Start Tailscale' compose up -d --no-build --wait --wait-timeout 90
+    progress 'Start Tailscale' compose --profile tailscale up -d --no-build --wait --wait-timeout 90 tailscale
   fi
   # --wait checks containers, not VPN enrollment or upstream reachability.
   step "Check $stack container"
-  compose ps
+  compose --profile "$stack" ps "$stack"
 }
 
 case "$action" in
@@ -75,14 +71,14 @@ case "$action" in
     if [[ $stack == caddy ]]; then
       progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/build-caddy.sh"
     else
-      progress 'Verify pinned Tailscale image' env STACK="$stack" bash "$ROOT/scripts/lock-images.sh" verify
-      progress 'Pull Tailscale image' compose pull
+      progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/lock-images.sh" verify
+      progress 'Pull Tailscale image' compose --profile tailscale pull tailscale
     fi
     exit 0
     ;;
   logs)
     check_stack
-    compose logs --tail 100 --follow
+    compose --profile "$stack" logs --tail 100 --follow "$stack"
     exit 0
     ;;
   vpn-login)
@@ -93,7 +89,7 @@ case "$action" in
     fi
     stack=tailscale
     check_stack
-    compose exec tailscale tailscale up --accept-dns=false
+    compose --profile tailscale exec tailscale tailscale up --accept-dns=false
     exit 0
     ;;
   configure) ;;
@@ -115,10 +111,16 @@ if [[ $caddy_only == no && $VPN == wireguard && -z $WG_ENDPOINT ]]; then
   ask WG_ENDPOINT 'WireGuard public IPv4 address or DNS name'
 fi
 validate_config
-if [[ $vpn_only == no && $CADDY_MODE != docker && -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
+if [[ $vpn_only == no && $CADDY_MODE != docker ]] && {
+  [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=caddy) ]] ||
+    [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy --filter label=com.docker.compose.service=caddy) ]]
+}; then
   die 'Stop Caddy before disabling it.'
 fi
-if [[ $caddy_only == no && $VPN != tailscale ]] && [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-tailscale) ]]; then
+if [[ $caddy_only == no && $VPN != tailscale ]] && {
+  [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=tailscale) ]] ||
+    [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-tailscale --filter label=com.docker.compose.service=tailscale) ]]
+}; then
   die 'Stop Tailscale before choosing another VPN. Keep a public SSH connection open.'
 fi
 if [[ $caddy_only == no && $VPN != wireguard ]] && systemctl is-active --quiet wg-quick@wg0; then
@@ -235,9 +237,13 @@ if [[ $vpn_only == no && $CADDY_MODE != none ]]; then
   if [[ $caddy_pending == no ]]; then chown "$ADMIN_USER:$admin_group" "$ROOT/.local/caddy.env"; fi
 fi
 if [[ $vpn_only == no && $caddy_pending == yes ]] &&
-  [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy) ]]; then
+  { [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=caddy) ]] ||
+    [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps-caddy --filter label=com.docker.compose.service=caddy) ]]; }; then
   stack=caddy
-  progress 'Stop Caddy until its routes are ready' compose stop caddy
+  if [[ -n $(docker ps -q --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=caddy) ]]; then
+    progress 'Stop Caddy until its routes are ready' compose --profile caddy stop caddy
+  fi
+  remove_legacy_compose caddy
 fi
 
 if [[ $caddy_only == no && $VPN != none ]]; then

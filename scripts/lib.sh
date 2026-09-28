@@ -157,6 +157,31 @@ find_compose() {
   fi
 }
 
+# The shared project replaces the older per-service Compose projects.
+remove_legacy_compose() {
+  local stack=$1 env_file legacy_project="vps-$1"
+  local -a env_args=(--env-file "$ROOT/.env.example")
+  case "$stack" in caddy | tailscale) ;; *) die 'Choose Caddy or Tailscale.' ;; esac
+  [[ -n $(docker ps -aq --filter "label=com.docker.compose.project=$legacy_project") ]] || return 0
+  find_compose
+  env_file="$ROOT/.local/$stack.env"
+  [[ ! -f $env_file ]] || env_args+=(--env-file "$env_file")
+  progress "Move $stack into the combined Compose project" "${COMPOSE[@]}" \
+    "${env_args[@]}" --project-name "$legacy_project" -f "$ROOT/stacks/$stack/compose.yaml" \
+    --profile "$stack" down
+}
+
+compose() {
+  local env_file
+  local -a env_args=(--env-file "$ROOT/.env.example")
+  find_compose
+  for env_file in "$ROOT/.local/caddy.env" "$ROOT/.local/tailscale.env"; do
+    [[ ! -f $env_file ]] || env_args+=(--env-file "$env_file")
+  done
+  "${COMPOSE[@]}" "${env_args[@]}" -f "$ROOT/stacks/compose.yaml" \
+    -f "$ROOT/stacks/compose.lock.yaml" "$@"
+}
+
 load_config() {
   local file=$1 key value
   [[ -f $file ]] || die "Config not found: $file"

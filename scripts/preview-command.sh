@@ -97,60 +97,59 @@ preview_binaries() {
 }
 
 preview_image_locks() {
-  local operation=$1 selection=$2 image_stack source_file lock
-  local stacks=(caddy tailscale)
-  case "$selection" in
-    all) ;;
-    caddy | tailscale) stacks=("$selection") ;;
-    *) die 'Set STACK=caddy or tailscale.' ;;
-  esac
-  for image_stack in "${stacks[@]}"; do
-    source_file="$ROOT/stacks/$image_stack/compose.yaml"
-    [[ $image_stack != caddy ]] || source_file="$ROOT/stacks/caddy/images.yaml"
-    lock="$ROOT/stacks/$image_stack/compose.lock.json"
-    run docker compose --env-file "$ROOT/.env.example" -f "$source_file" \
-      config --lock-image-digests --output '<temporary-directory>/locked.yaml'
-    run docker compose --env-file "$ROOT/.env.example" -f "$source_file" \
-      -f '<temporary-directory>/locked.yaml' config --format json
-    if [[ $image_stack == caddy ]]; then
-      note 'Use jq to turn the resolved builder and runtime images into build arguments.'
-    else
-      note "Use jq to keep the $image_stack image digest."
-    fi
-    if [[ $operation == lock ]]; then
-      run mv "<temporary-directory>/$image_stack.json" "$lock"
-    else
-      run diff -u "$lock" "<temporary-directory>/$image_stack.json"
-      note 'Stop if the saved lock is missing or differs.'
-    fi
-    run docker compose --env-file "$ROOT/.env.example" \
-      -f "$ROOT/stacks/$image_stack/compose.yaml" -f "$lock" config --quiet
-  done
+  local operation=$1 lock="$ROOT/stacks/compose.lock.yaml"
+  note "Use a temporary lock under $ROOT/.image-lock.XXXXXX and remove it when done."
+  run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
+    --profile caddy --profile tailscale \
+    config --lock-image-digests --output '<temporary-directory>/compose.lock.yaml'
+  if [[ $operation == lock ]]; then
+    run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
+      -f '<temporary-directory>/compose.lock.yaml' --profile caddy --profile tailscale config --quiet
+    run chmod 0644 '<temporary-directory>/compose.lock.yaml'
+    run mv '<temporary-directory>/compose.lock.yaml' "$lock"
+  else
+    run cmp -s "$lock" '<temporary-directory>/compose.lock.yaml'
+    run diff -u "$lock" '<temporary-directory>/compose.lock.yaml'
+    note 'Stop if the saved lock is missing or differs.'
+    run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
+      -f "$lock" --profile caddy --profile tailscale config --quiet
+  fi
+  run rm -rf '<temporary-directory>'
 }
 
 preview_caddy_build() {
-  preview_image_locks verify caddy
-  run docker compose --env-file "$ROOT/.env.example" \
-    -f "$ROOT/stacks/caddy/compose.yaml" -f "$ROOT/stacks/caddy/compose.lock.json" build --pull caddy
+  preview_image_locks verify
+  run docker compose --env-file "$ROOT/.env.example" --profile caddy \
+    -f "$ROOT/stacks/compose.yaml" -f "$ROOT/stacks/compose.lock.yaml" build --pull caddy
+}
+
+preview_legacy_compose() {
+  local legacy_stack=$1
+  note "If the old vps-$legacy_stack project exists, stop it before using the combined project."
+  run docker compose --env-file /opt/vps/.env.example \
+    --env-file "/opt/vps/.local/$legacy_stack.env" --project-name "vps-$legacy_stack" \
+    -f "/opt/vps/stacks/$legacy_stack/compose.yaml" --profile "$legacy_stack" down
 }
 
 preview_stack() {
   case "$stack" in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
-  compose=(docker compose --env-file "/opt/vps/.local/$stack.env"
-    -f "/opt/vps/stacks/$stack/compose.yaml" -f "/opt/vps/stacks/$stack/compose.lock.json")
+  compose=(docker compose --env-file /opt/vps/.env.example
+    --env-file /opt/vps/.local/caddy.env --env-file /opt/vps/.local/tailscale.env
+    -f /opt/vps/stacks/compose.yaml -f /opt/vps/stacks/compose.lock.yaml --profile "$stack")
   case "$action" in
     apply)
+      preview_legacy_compose "$stack"
       run "${compose[@]}" config --quiet
       if [[ $stack == caddy ]]; then
         preview_caddy_build
         run "${compose[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
       else
-        preview_image_locks verify "$stack"
+        preview_image_locks verify
       fi
       if [[ $stack == caddy ]]; then
-        run "${compose[@]}" up -d --no-build --force-recreate --wait --wait-timeout 90
+        run "${compose[@]}" up -d --no-build --force-recreate --wait --wait-timeout 90 "$stack"
       else
-        run "${compose[@]}" up -d --no-build --wait --wait-timeout 90
+        run "${compose[@]}" up -d --no-build --wait --wait-timeout 90 "$stack"
       fi
       run "${compose[@]}" ps
       ;;
@@ -158,8 +157,8 @@ preview_stack() {
       if [[ $stack == caddy ]]; then
         preview_caddy_build
       else
-        preview_image_locks verify "$stack"
-        run "${compose[@]}" pull
+        preview_image_locks verify
+        run "${compose[@]}" pull "$stack"
       fi
       ;;
     logs) run "${compose[@]}" logs --tail 100 --follow ;;

@@ -38,11 +38,11 @@ note 'Containers'
 docker compose ls
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 if [[ $CADDY_MODE == docker ]]; then
-  caddy_container=$(docker compose --env-file "$ROOT/.local/caddy.env" -f "$ROOT/stacks/caddy/compose.yaml" -f "$ROOT/stacks/caddy/compose.lock.json" ps --status running --quiet)
+  caddy_container=$(compose --profile caddy ps --status running --quiet caddy)
   [[ -n $caddy_container ]] || failed=1
 fi
 if [[ $VPN == tailscale ]]; then
-  docker compose --env-file "$ROOT/.local/tailscale.env" -f "$ROOT/stacks/tailscale/compose.yaml" -f "$ROOT/stacks/tailscale/compose.lock.json" exec -T tailscale tailscale status || failed=1
+  compose --profile tailscale exec -T tailscale tailscale status || failed=1
 elif [[ $VPN == wireguard ]]; then
   wg show wg0 || failed=1
 fi
