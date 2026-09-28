@@ -14,41 +14,44 @@ help:
 	  'First boot:' \
 	  '  Run ./setup-vps.sh as root on the Ubuntu box' \
 	  '  ./setup-vps.sh --help' \
+	  '  DRY_RUN=1 make <command> previews a command without changing the host' \
 	  '' \
 	  'SSH setup:' \
-	  '  configure-ssh       Require key-only SSH; rollback starts in five minutes' \
 	  '  confirm-ssh         Confirm from a fresh SSH connection' \
+	  '  configure-ssh       Require key-only SSH; starts a five-minute rollback' \
 	  '  rollback-ssh        Restore a pending SSH change' \
 	  '' \
 	  'Host tools:' \
-	  '  setup-host          Install tools, link configs, and enter zsh' \
-	  '  install-dotfiles    Link configs and enter zsh' \
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
 	  '  check-repo          Check scripts and configuration' \
+	  '  install-dotfiles    Link configs and enter zsh' \
 	  '  install-packages    Install Ubuntu packages from config/apt/packages.txt' \
 	  '  install-tools       Install pinned tools from config/apt/binaries.tsv' \
+	  '  setup-host          Install tools, show status, link configs, and enter zsh' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
 	  'Caddy:' \
 	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
 	  '  configure-caddy     Configure Caddy and its site routes' \
-	  '  lock-images         Lock images from all included Compose files' \
-	  '  verify-images       Check the combined image lock' \
 	  '' \
-	  'Services:' \
-	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
-	  '  configure-services  Configure saved Caddy and VPN choices in order' \
+	  'VPN:' \
+	  '  configure-services  Apply saved Caddy and VPN settings in order' \
 	  '  configure-tailscale Configure only Tailscale' \
 	  '  configure-wireguard Configure only WireGuard' \
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
+	  '' \
+	  'Compose:' \
+	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
+	  '  down                Stop containers in the combined Compose project' \
+	  '  lock-images         Update the lock for images in all included Compose files' \
 	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
-	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
-	  '  show-containers     List containers in the combined Compose project' \
-	  '  up                  Start configured services and build local images' \
-	  '  down                Stop all services in the Compose project' \
-	  '  restart             Restart configured services' \
 	  '  recreate            Rebuild and recreate configured services' \
+	  '  restart             Restart configured services' \
+	  '  show-containers     List containers in the combined Compose project' \
+	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
+	  '  up                  Start configured services and build local images' \
+	  '  verify-images       Check the combined image lock' \
 	  '' \
 	  'Deployment:' \
 	  '  deploy-stack        Check, preview, sync, and apply (HOST=... STACK=...)' \
@@ -58,8 +61,8 @@ help:
 	  'Local VMs:' \
 	  '  create-vm           Create Ubuntu: make create-vm name=lab vcpu=8 memory=16 storage=64' \
 	  '  list-vm             Show local VM instances' \
-	  '  start-vm            Start and attach; display=gui opens a QEMU window' \
-	  '  attach-vm           Attach to the serial console, with no GUI' \
+	  '  start-vm            Start and attach (display=gui or display=console)' \
+	  '  attach-vm           Attach to the serial console' \
 	  '  stop-vm             Shut down the selected VM' \
 	  '  teardown-vm         Delete the selected VM and its disk'
 
