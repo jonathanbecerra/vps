@@ -4,6 +4,7 @@ build-essential
 ca-certificates
 cloc
 curl
+deja
 eza
 fail2ban
 fd-find
