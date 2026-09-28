@@ -1,0 +1,2 @@
+// The distro's 50unattended-upgrades file defines allowed security origins.
+Unattended-Upgrade::Automatic-Reboot "false";

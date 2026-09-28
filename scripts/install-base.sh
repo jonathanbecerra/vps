@@ -73,7 +73,7 @@ if [[ ! -f /etc/vps-setup/host.conf ]] && command -v docker >/dev/null && docker
 fi
 
 printf '\nHost: %s\nAdmin: %s\n' "$SERVER_HOSTNAME" "$ADMIN_USER"
-printf 'The OS gets updated and the base packages are installed.\n'
+printf 'The OS gets updated; Docker, UFW, fail2ban, and automatic updates are configured.\n'
 printf 'The admin account gets the public key and sudo access.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
@@ -133,6 +133,9 @@ for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SE
   printf '%s=%s\n' "$key" "${!key}"
 done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf
+
+progress 'Install Docker and Compose' bash "$ROOT/scripts/install-docker.sh"
+bash "$ROOT/scripts/configure-security.sh"
 
 source_repo=$(realpath "$ROOT")
 if [[ $source_repo == "/home/$ADMIN_USER/vps" || $source_repo == /root/vps ]]; then
