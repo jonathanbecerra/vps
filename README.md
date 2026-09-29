@@ -148,3 +148,7 @@ rsync -avz --delete-after --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/lab_ed
 ```
 
 Packages are in `config/apt/packages.txt`; run `make install-packages` or `make install-tools` after changes. Use `DRY_RUN=1 make setup-host` to preview. Run `make check-repo` before syncing.
+
+Node is pinned in `.nvmrc` and installed through pinned NVM by `make install-dotfiles`; `dotfiles/dependencies/nvm/default-packages` pins pnpm under that Node version. Neovim language tools are pinned in `dotfiles/dependencies/nvim/package-lock.json`.
+
+Portable Rosé Pine configs and their dependency manifests live under `dotfiles/`; use `make stow-dotfiles` on a personal machine (`DRY_RUN=1` previews links). Homebrew tools are listed in `dotfiles/brew/Brewfile`. Ubuntu first-boot setup installs Docker CE and its Compose plugin outside the apt tool list.

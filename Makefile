@@ -2,7 +2,7 @@
 export DRY_RUN HOST STACK
 .PHONY: help
 .PHONY: check-editor check-repo show-status
-.PHONY: install-dotfiles install-packages install-tools setup-host update-system
+.PHONY: install-dotfiles stow-dotfiles install-packages install-tools setup-host update-system
 .PHONY: confirm-ssh configure-ssh rollback-ssh
 .PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
 .PHONY: down lock-images recreate restart show-containers up
@@ -25,6 +25,7 @@ help:
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
 	  '  check-repo          Check scripts and configuration' \
 	  '  install-dotfiles    Link configs and enter zsh' \
+	  '  stow-dotfiles       Link portable dotfiles packages with scripts/stow.sh' \
 	  '  install-packages    Install Ubuntu packages from config/apt/packages.txt' \
 	  '  install-tools       Install pinned tools from config/apt/binaries.tsv' \
 	  '  setup-host          Install tools, show status, link configs, and enter zsh' \
@@ -73,6 +74,9 @@ setup-host:
 
 install-dotfiles:
 	@bash scripts/os/install-dotfiles.sh --reload-shell
+
+stow-dotfiles:
+	@bash scripts/stow.sh
 
 check-editor:
 	@bash scripts/os/check-editor.sh
