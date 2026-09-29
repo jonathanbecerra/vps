@@ -1,10 +1,16 @@
 # Ubuntu packages and names from binaries.tsv.
+# Docker/Compose and Tailscale use dedicated setup paths; pnpm is NVM-managed.
 bat
+btop
 build-essential
 ca-certificates
 cloc
+cloudflared
+cmake
+coreutils
 curl
 deja
+direnv
 eza
 fail2ban
 fd-find
@@ -12,26 +18,39 @@ fontconfig
 fzf
 gettext-base
 git
+git-cliff
+git-delta
 glow
 gnupg
+inetutils
 jq
 lazydocker
 lazygit
+less
+lua-language-server
+lsof
 make
 ncurses-bin
 nvim
 openssh-server
+# Required by the configured fail2ban systemd backend.
 python3-systemd
 ripgrep
 rsync
+ruby
 shellcheck
 shfmt
+stow
+superfile
 sudo
 tmux
 tree
 ufw
 unzip
 util-linux
+vivid
+zip
 yq
 zsh
+zsh-autosuggestions
 zsh-syntax-highlighting
