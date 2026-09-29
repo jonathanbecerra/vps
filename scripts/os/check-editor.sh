@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested check-editor "$@"
 begin 'Check Neovim config'
 temporary=$(mktemp -d)

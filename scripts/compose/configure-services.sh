@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested configure-services "$@"
 [[ $(uname -s) == Linux ]] || die 'Run service commands on the Linux host, or use make apply-stack HOST=... STACK=...'
 load_config /etc/vps-setup/host.conf
@@ -45,10 +45,10 @@ apply_stack() {
   remove_legacy_compose "$stack"
   progress "Check $stack compose file" compose --profile "$stack" config --quiet
   if [[ $stack == caddy ]]; then
-    progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/build-caddy.sh"
+    progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/compose/build-caddy.sh"
     progress 'Validate Caddy configuration' compose --profile caddy run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
   else
-    progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/lock-images.sh" verify
+    progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/compose/lock-images.sh" verify
   fi
   if [[ $stack == caddy ]]; then
     progress 'Start Caddy' compose --profile caddy up -d --no-build --force-recreate --wait --wait-timeout 90 caddy
@@ -69,9 +69,9 @@ case "$action" in
   pull)
     check_stack
     if [[ $stack == caddy ]]; then
-      progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/build-caddy.sh"
+      progress 'Build Caddy with Cloudflare DNS' bash "$ROOT/scripts/compose/build-caddy.sh"
     else
-      progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/lock-images.sh" verify
+      progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/compose/lock-images.sh" verify
       progress 'Pull Tailscale image' compose --profile tailscale pull tailscale
     fi
     exit 0
@@ -286,7 +286,7 @@ if [[ $caddy_only == no && $VPN == tailscale ]]; then
   stack=tailscale
   apply_stack
 elif [[ $caddy_only == no && $VPN == wireguard ]]; then
-  bash "$ROOT/scripts/install-wireguard.sh"
+  bash "$ROOT/scripts/os/install-wireguard.sh"
 fi
 if [[ $caddy_pending == yes ]]; then
   :

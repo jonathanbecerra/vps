@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 action=${1:-lock}
 case "$action" in lock | verify) ;; *) die 'Use lock-images.sh lock|verify.' ;; esac
 [[ -z ${STACK:-} ]] || die 'Image locks cover every included service; run without STACK.'

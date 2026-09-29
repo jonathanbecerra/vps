@@ -470,7 +470,7 @@ case "$command" in
     [[ ${HOST:-} =~ ^([a-z_][a-z0-9_-]*@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die 'Set HOST to an SSH alias or user@hostname.'
     run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" 'test "$(id -u)" -ne 0 && test -w /opt/vps'
     if [[ $action == apply ]]; then
-      run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "bash /opt/vps/scripts/configure-services.sh apply $stack"
+      run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "bash /opt/vps/scripts/compose/configure-services.sh apply $stack"
       note "On $HOST:"
       preview_stack
     else

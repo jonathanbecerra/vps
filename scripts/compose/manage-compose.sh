@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 action=${1:?Choose up, down, restart, recreate, or ps}
 case "$action" in up | down | restart | recreate | ps) ;; *) die 'Choose up, down, restart, recreate, or ps.' ;; esac
 preview_if_requested "compose-$action" "$@"
@@ -20,7 +20,7 @@ fi
 
 case "$action" in
   up | recreate)
-    progress 'Verify pinned service images' bash "$ROOT/scripts/lock-images.sh" verify
+    progress 'Verify pinned service images' bash "$ROOT/scripts/compose/lock-images.sh" verify
     if [[ $action == up ]]; then
       progress 'Start enabled services' compose "${profiles[@]}" up -d --build
     else

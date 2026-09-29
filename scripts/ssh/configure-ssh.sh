@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested configure-ssh "$@"
 require_root
 setup_lock
@@ -38,7 +38,7 @@ case "$action" in
     [[ ! -e /etc/ssh/vps-setup.conf ]] || cp -a /etc/ssh/vps-setup.conf "$pending/vps-setup.conf"
     ssh_service >"$pending/service"
     printf '%s\n' "$SSH_CONNECTION" >"$pending/connection"
-    install -m 0755 "$ROOT/scripts/rollback-ssh.sh" /usr/local/sbin/vps-rollback-ssh
+    install -m 0755 "$ROOT/scripts/ssh/rollback-ssh.sh" /usr/local/sbin/vps-rollback-ssh
     trap 'result=$?; if ((result != 0)); then /usr/local/sbin/vps-rollback-ssh || true; fi; release_setup_lock' EXIT
     systemctl stop vps-rollback-ssh.timer vps-rollback-ssh.service 2>/dev/null || true
     systemctl reset-failed vps-rollback-ssh.service 2>/dev/null || true
@@ -71,5 +71,5 @@ case "$action" in
     mv "$pending" "/var/backups/vps-setup/ssh-confirmed-$(date +%Y%m%d-%H%M%S)"
     note 'SSH confirmed. Rollback is cancelled; root and password logins are off.'
     ;;
-  *) die 'Usage: scripts/configure-ssh.sh harden|confirm' ;;
+  *) die 'Usage: configure-ssh.sh harden|confirm' ;;
 esac

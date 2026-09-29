@@ -9,7 +9,7 @@ for tool in bash shellcheck shfmt jq zsh; do
     exit 1
   }
 done
-files=(setup-vps.sh scripts/*.sh scripts/vm/*.sh)
+files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/compose/*.sh scripts/deploy/*.sh scripts/vm/*.sh)
 for file in "${files[@]}"; do bash -n "$file"; done
 shellcheck -x "${files[@]}"
 shfmt -d -i 2 -ci "${files[@]}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 
 key_file=
 config_file=
@@ -159,8 +159,8 @@ configure_host() {
   done >/etc/vps-setup/host.conf
   chmod 0644 /etc/vps-setup/host.conf
 
-  progress 'Install Docker and Compose' bash "$ROOT/scripts/install-docker.sh"
-  bash "$ROOT/scripts/configure-security.sh"
+  progress 'Install Docker and Compose' bash "$ROOT/scripts/os/install-docker.sh"
+  bash "$ROOT/scripts/os/configure-security.sh"
 }
 
 setup_pid=$BASHPID

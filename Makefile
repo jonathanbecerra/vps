@@ -72,93 +72,93 @@ setup-host:
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory install-dotfiles
 
 install-dotfiles:
-	@bash scripts/install-dotfiles.sh --reload-shell
+	@bash scripts/os/install-dotfiles.sh --reload-shell
 
 check-editor:
-	@bash scripts/check-editor.sh
+	@bash scripts/os/check-editor.sh
 
 check-repo:
 	@bash scripts/check-repo.sh
 
 # Confirm from a fresh key login before the rollback timer expires.
 configure-ssh:
-	@bash scripts/run-root.sh scripts/configure-ssh.sh harden
+	@bash scripts/run-root.sh scripts/ssh/configure-ssh.sh harden
 
 confirm-ssh:
-	@bash scripts/run-root.sh scripts/configure-ssh.sh confirm
+	@bash scripts/run-root.sh scripts/ssh/configure-ssh.sh confirm
 
 rollback-ssh:
-	@bash scripts/run-root.sh scripts/rollback-ssh.sh
+	@bash scripts/run-root.sh scripts/ssh/rollback-ssh.sh
 
 show-status:
-	@bash scripts/run-root.sh scripts/show-status.sh
+	@bash scripts/run-root.sh scripts/os/show-status.sh
 
 update-system:
-	@bash scripts/run-root.sh scripts/update-system.sh
+	@bash scripts/run-root.sh scripts/os/update-system.sh
 
 install-packages:
-	@bash scripts/run-root.sh scripts/install-packages.sh
+	@bash scripts/run-root.sh scripts/os/install-packages.sh
 
 install-tools:
-	@bash scripts/run-root.sh scripts/install-tools.sh
+	@bash scripts/run-root.sh scripts/os/install-tools.sh
 
 build-caddy:
-	@bash scripts/build-caddy.sh
+	@bash scripts/compose/build-caddy.sh
 
 lock-images:
-	@bash scripts/lock-images.sh lock
-	@bash scripts/lock-images.sh verify
+	@bash scripts/compose/lock-images.sh lock
+	@bash scripts/compose/lock-images.sh verify
 
 verify-images:
-	@bash scripts/lock-images.sh verify
+	@bash scripts/compose/lock-images.sh verify
 
 up:
-	@bash scripts/manage-compose.sh up
+	@bash scripts/compose/manage-compose.sh up
 
 down:
-	@bash scripts/manage-compose.sh down
+	@bash scripts/compose/manage-compose.sh down
 
 restart:
-	@bash scripts/manage-compose.sh restart
+	@bash scripts/compose/manage-compose.sh restart
 
 recreate:
-	@bash scripts/manage-compose.sh recreate
+	@bash scripts/compose/manage-compose.sh recreate
 
 show-containers:
-	@bash scripts/manage-compose.sh ps
+	@bash scripts/compose/manage-compose.sh ps
 
 configure-caddy:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
+	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
 
 configure-services:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
+	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
 
 configure-tailscale:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure --vpn=tailscale --vpn-only
+	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --vpn=tailscale --vpn-only
 
 configure-wireguard:
-	@bash scripts/run-root.sh scripts/configure-services.sh configure --vpn=wireguard --vpn-only
+	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --vpn=wireguard --vpn-only
 
 apply-stack:
-	@bash scripts/apply-stack.sh
+	@bash scripts/compose/apply-stack.sh
 
 login-vpn:
-	@bash scripts/configure-services.sh vpn-login
+	@bash scripts/compose/configure-services.sh vpn-login
 
 pull-stack:
-	@bash scripts/configure-services.sh pull "$$STACK"
+	@bash scripts/compose/configure-services.sh pull "$$STACK"
 
 show-logs:
-	@bash scripts/configure-services.sh logs "$$STACK"
+	@bash scripts/compose/configure-services.sh logs "$$STACK"
 
 deploy-stack:
-	@bash scripts/deploy-stack.sh
+	@bash scripts/deploy/deploy-stack.sh
 
 preview-deploy:
-	@bash scripts/sync-repo.sh plan
+	@bash scripts/deploy/sync-repo.sh plan
 
 sync-repo:
-	@bash scripts/sync-repo.sh sync
+	@bash scripts/deploy/sync-repo.sh sync
 
 create-vm: export VM_PASSWORD = $(password)
 create-vm: export VM_PASSWORD_SET = $(if $(filter undefined,$(origin password)),no,yes)
