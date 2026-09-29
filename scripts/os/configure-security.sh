@@ -16,6 +16,7 @@ backup /etc/default/ufw
 sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw
 ufw default deny incoming
 ufw default allow outgoing
+ufw default deny routed
 while IFS= read -r port; do
   [[ $port =~ ^[0-9]+$ && $port -ge 1 && $port -le 65535 ]] || die 'Could not determine an SSH port.'
   ufw allow "$port/tcp" comment 'SSH'

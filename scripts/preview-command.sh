@@ -58,6 +58,7 @@ preview_security() {
   note 'Keep existing firewall rules and allow all detected SSH listeners first.'
   run ufw default deny incoming
   run ufw default allow outgoing
+  run ufw default deny routed
   run ufw allow '<detected-ssh-port>/tcp'
   run ufw logging low
   run ufw --force enable
@@ -493,7 +494,8 @@ case "$command" in
     run ss -tulnp
     run docker compose ls
     run docker ps
-    note 'Check SSH, Docker, UFW, fail2ban, selected services, pending rollback, and reboot status.'
+    note 'Verify UFW is active with deny incoming, allow outgoing, and deny routed policies.'
+    note 'Check SSH, Docker port bindings, fail2ban, selected services, pending rollback, and reboot status.'
     ;;
   update-system)
     note 'Require SSH confirmation first. Ask before upgrading. Reboot separately when ready.'

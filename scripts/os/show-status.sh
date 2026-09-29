@@ -19,12 +19,15 @@ for service in "$(ssh_service)" docker fail2ban ufw; do
   if ! systemctl is-active "$service"; then failed=1; fi
 done
 note 'Firewall and SSH bans'
-ufw status verbose
+firewall_status=$(LC_ALL=C ufw status verbose)
+printf '%s\n' "$firewall_status"
+grep -qx 'Status: active' <<<"$firewall_status" || failed=1
+grep -Eq '^Default: deny \(incoming\), allow \(outgoing\), deny \(routed\)$' <<<"$firewall_status" || failed=1
 fail2ban-client status sshd || failed=1
 note 'SSH settings in use'
 policy=$(/usr/sbin/sshd -T -C "user=$ADMIN_USER,host=$SERVER_HOSTNAME,addr=127.0.0.1")
 printf '%s\n' "$policy" | awk '$1 ~ /^(port|permitrootlogin|passwordauthentication|kbdinteractiveauthentication|pubkeyauthentication|authenticationmethods|allowusers)$/ {print}'
-for rule in 'permitrootlogin no' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'authenticationmethods publickey'; do
+for rule in 'permitrootlogin no' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication yes' 'authenticationmethods publickey' "allowusers $ADMIN_USER"; do
   grep -qxF "$rule" <<<"$policy" || failed=1
 done
 if [[ -d /var/lib/vps-setup/ssh-pending ]]; then
@@ -37,6 +40,20 @@ ss -tulnp
 note 'Containers'
 docker compose ls
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+mapfile -t container_ids < <(docker ps -q)
+if ((${#container_ids[@]})); then
+  public_bindings=$(docker inspect "${container_ids[@]}" | jq -r '
+    .[] as $container |
+    ($container.HostConfig.PortBindings // {}) | to_entries[] |
+    .key as $container_port | .value[]? |
+    select(.HostIp != "127.0.0.1" and .HostIp != "::1") |
+    "\($container.Name) \($container_port) -> \(.HostIp // "*"):\(.HostPort)"
+  ')
+  if [[ -n $public_bindings ]]; then
+    printf 'Docker ports are not bound to loopback:\n%s\n' "$public_bindings"
+    failed=1
+  fi
+fi
 if [[ $CADDY_MODE == docker ]]; then
   caddy_container=$(compose --profile caddy ps --status running --quiet caddy)
   [[ -n $caddy_container ]] || failed=1

@@ -83,7 +83,7 @@ Edit `/opt/vps/.local/caddy-sites.caddy` to change routes, then run `make config
 
 `make configure-services` handles the saved Caddy choice, then the saved VPN choice. Use `make configure-tailscale` or `make configure-wireguard` to configure only that VPN.
 
-Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zone or zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW opens TCP 80/443 and UDP 443; add the same inbound rules to the Hetzner firewall. WireGuard creates `/opt/vps/.local/wireguard-client.conf`; open UDP 51820 in the provider firewall too.
+Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW is the host firewall: deny incoming and routed traffic by default, allow outbound traffic, then open the detected SSH port and selected services. Caddy opens TCP 80/443 and UDP 443; WireGuard opens UDP 51820. A provider firewall adds defense in depth; if enabled, mirror the intended public services there. On a Pi, allow only public web ports through the router; do not expose SSH, and apply the same policy to IPv6.
 
 ## Compose
 
@@ -99,6 +99,8 @@ make verify-images
 ```
 
 `make down` removes project containers and networks. Bind-mounted data under `/data` stays in place.
+
+Keep new Compose services behind Caddy. Docker-published ports can bypass UFW, so bind any required host ports to `127.0.0.1`; `make show-status` flags published ports bound to other addresses. UFW protects this host and denies forwarding through it; UniFi controls traffic between network zones.
 
 ## Hetzner
 
