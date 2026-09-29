@@ -1,6 +1,6 @@
 # Dotfiles
 
-From the VPS repository root, use `make stow-dotfiles`; `DRY_RUN=1 make stow-dotfiles` previews links. The packages here use Rosé Pine, including Glow through the `mat` alias, with Iris directories in eza and a local Powerlevel10k prompt.
+From the VPS repository root, use `make stow-dotfiles`; `DRY_RUN=1 make stow-dotfiles` previews links. The packages here use Rosé Pine, including Glow and the `mat` shortcut, with Iris directories in eza and a local Powerlevel10k prompt.
 
 Neovim uses lazy.nvim as its plugin manager, with a mini.starter start screen; it is a small custom config, not the LazyVim distribution.
 

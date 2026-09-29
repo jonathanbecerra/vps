@@ -30,7 +30,11 @@ if (( $+commands[docker-compose] )); then
 else
   alias dc='docker compose'
 fi
-alias mat='glow'
+glow() {
+  # Pass an absolute style path for Glow versions that do not expand config paths.
+  command glow --style "$HOME/.config/glow/styles/rose-pine.json" "$@"
+}
+mat() { glow "$@"; }
 alias tms='bash "$HOME/.config/tmux/choose-session.sh"'
 alias fzfc='fzf | xclip -selection clipboard'
 (( $+commands[bat] )) || { (( $+commands[batcat] )) && alias bat='batcat'; }
