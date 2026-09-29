@@ -94,7 +94,7 @@ case ${DRY_RUN:-0} in 0 | 1) ;; *) die 'DRY_RUN must be 0 or 1.' ;; esac
 
 preview_if_requested() {
   [[ ${DRY_RUN:-0} == 1 ]] || return 0
-  exec bash "$ROOT/scripts/preview-command.sh" "$@"
+  exec bash "$ROOT/scripts/preview.sh" "$@"
 }
 
 run() {

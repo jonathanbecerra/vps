@@ -78,29 +78,29 @@ check-editor:
 	@bash scripts/os/check-editor.sh
 
 check-repo:
-	@bash scripts/check-repo.sh
+	@bash scripts/check.sh
 
 # Confirm from a fresh key login before the rollback timer expires.
 configure-ssh:
-	@bash scripts/run-root.sh scripts/ssh/configure-ssh.sh harden
+	@bash scripts/root.sh scripts/ssh/configure-ssh.sh harden
 
 confirm-ssh:
-	@bash scripts/run-root.sh scripts/ssh/configure-ssh.sh confirm
+	@bash scripts/root.sh scripts/ssh/configure-ssh.sh confirm
 
 rollback-ssh:
-	@bash scripts/run-root.sh scripts/ssh/rollback-ssh.sh
+	@bash scripts/root.sh scripts/ssh/rollback-ssh.sh
 
 show-status:
-	@bash scripts/run-root.sh scripts/os/show-status.sh
+	@bash scripts/root.sh scripts/os/show-status.sh
 
 update-system:
-	@bash scripts/run-root.sh scripts/os/update-system.sh
+	@bash scripts/root.sh scripts/os/update-system.sh
 
 install-packages:
-	@bash scripts/run-root.sh scripts/os/install-packages.sh
+	@bash scripts/root.sh scripts/os/install-packages.sh
 
 install-tools:
-	@bash scripts/run-root.sh scripts/os/install-tools.sh
+	@bash scripts/root.sh scripts/os/install-tools.sh
 
 build-caddy:
 	@bash scripts/compose/build-caddy.sh
@@ -128,16 +128,16 @@ show-containers:
 	@bash scripts/compose/manage-compose.sh ps
 
 configure-caddy:
-	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
+	@bash scripts/root.sh scripts/compose/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
 
 configure-services:
-	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
+	@bash scripts/root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
 
 configure-tailscale:
-	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --vpn=tailscale --vpn-only
+	@bash scripts/root.sh scripts/compose/configure-services.sh configure --vpn=tailscale --vpn-only
 
 configure-wireguard:
-	@bash scripts/run-root.sh scripts/compose/configure-services.sh configure --vpn=wireguard --vpn-only
+	@bash scripts/root.sh scripts/compose/configure-services.sh configure --vpn=wireguard --vpn-only
 
 apply-stack:
 	@bash scripts/compose/apply-stack.sh
