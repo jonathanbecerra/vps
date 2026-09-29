@@ -11,9 +11,9 @@
     "branch": "master",
     "commit": "74b06c6c75e4eeb3108ec01852001636d85a932b"
   },
-  "catppuccin": {
+  "rose-pine": {
     "branch": "main",
-    "commit": "edefef779ab08ce1a4a404713e3012b0d202bd35"
+    "commit": "ff483051a47e27d84bdef47703538df1ed9f4a47"
   },
   "lualine.nvim": {
     "branch": "master",
@@ -30,6 +30,10 @@
   "nvim-lspconfig": {
     "branch": "master",
     "commit": "a9bb4d5f4276aa5cddc015faa3ecc5a7b5a26b14"
+  },
+  "SchemaStore.nvim": {
+    "branch": "main",
+    "commit": "411163b2be396495c76788a016cb1354f1e8acd0"
   },
   "blink.cmp": {
     "branch": "main",

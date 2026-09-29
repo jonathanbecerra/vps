@@ -3,13 +3,20 @@
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested check-editor "$@"
 begin 'Check Neovim config'
+command -v npm >/dev/null || die 'Install Node.js and npm to check the editor tools.'
 temporary=$(mktemp -d)
 trap 'rm -rf "$temporary"' EXIT
 export XDG_CONFIG_HOME="$temporary/config" XDG_DATA_HOME="$temporary/data"
 export XDG_STATE_HOME="$temporary/state" XDG_CACHE_HOME="$temporary/cache"
-mkdir -p "$XDG_CONFIG_HOME/nvim" "$XDG_DATA_HOME/nvim/lazy"
-cp "$ROOT/config/nvim/lazy-lock.json" "$XDG_CONFIG_HOME/nvim/lazy-lock.json"
-read -r repository commit < <(awk -F '\t' '$1 == "nvim/lazy/lazy.nvim" { print $2, $3 }' "$ROOT/config/zsh/plugins.tsv")
+tools_dir="$XDG_DATA_HOME/nvim/tools"
+mkdir -p "$XDG_CONFIG_HOME/nvim" "$XDG_DATA_HOME/nvim/lazy" "$tools_dir"
+cp "$ROOT/dotfiles/nvim/.config/nvim/lazy-lock.json" "$XDG_CONFIG_HOME/nvim/lazy-lock.json"
+cp "$ROOT/dotfiles/dependencies/nvim/package.json" "$ROOT/dotfiles/dependencies/nvim/package-lock.json" "$tools_dir/"
+progress 'Install locked Neovim tools' npm --prefix "$tools_dir" ci --no-audit --no-fund
+for tool in bash-language-server yaml-language-server vscode-json-language-server stylua; do
+  [[ -x $tools_dir/node_modules/.bin/$tool ]] || die "Neovim tool is missing: $tool"
+done
+read -r repository commit < <(awk -F '\t' '$1 == "nvim/lazy/lazy.nvim" { print $2, $3 }' "$ROOT/dotfiles/dependencies/plugins.tsv")
 progress 'Clone lazy.nvim' git clone -q --filter=blob:none "$repository" "$XDG_DATA_HOME/nvim/lazy/lazy.nvim"
 progress 'Fetch pinned lazy.nvim commit' git -C "$XDG_DATA_HOME/nvim/lazy/lazy.nvim" fetch -q --depth 1 "$repository" "$commit"
 git -C "$XDG_DATA_HOME/nvim/lazy/lazy.nvim" checkout -q --detach FETCH_HEAD
@@ -31,6 +38,11 @@ else
 fi
 tar -xzf "$temporary/nvim.tar.gz" -C "$temporary"
 export PATH="$temporary/$member/bin:$PATH"
-progress 'Restore Neovim plugins' nvim --headless -u "$ROOT/config/nvim/init.lua" '+Lazy! restore' +qa
-progress 'Check Lualine config' nvim --headless -u "$ROOT/config/nvim/init.lua" '+lua vim.wait(2500)' \
+progress 'Restore Neovim plugins' nvim --headless -u "$ROOT/dotfiles/nvim/.config/nvim/init.lua" '+Lazy! restore' +qa
+progress 'Check Lualine config' nvim --headless -u "$ROOT/dotfiles/nvim/.config/nvim/init.lua" '+lua vim.wait(2500)' \
   '+lua assert(vim.fn.exists(":LualineNotices") == 0, "lualine reported configuration notices")' +qa
+progress 'Check Neovim tool PATH' nvim --headless -u "$ROOT/dotfiles/nvim/.config/nvim/init.lua" \
+  '+lua assert(vim.fn.executable("bash-language-server") == 1 and vim.fn.executable("yaml-language-server") == 1 and vim.fn.executable("vscode-json-language-server") == 1 and vim.fn.executable("stylua") == 1, "Neovim tool PATH is incomplete")' +qa
+progress 'Check JSON and YAML schemas' nvim --headless -u "$ROOT/dotfiles/nvim/.config/nvim/init.lua" \
+  '+lua assert(#vim.lsp.config.yamlls.settings.yaml.schemas > 0, "YAML schemas are missing")' \
+  '+lua assert(#vim.lsp.config.jsonls.settings.json.schemas > 0, "JSON schemas are missing")' +qa

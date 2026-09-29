@@ -9,12 +9,13 @@ for tool in bash shellcheck shfmt jq zsh; do
     exit 1
   }
 done
-files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/compose/*.sh scripts/deploy/*.sh scripts/vm/*.sh)
+files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/compose/*.sh scripts/deploy/*.sh scripts/vm/*.sh dotfiles/tmux/.config/tmux/choose-session.sh)
 for file in "${files[@]}"; do bash -n "$file"; done
 shellcheck -x "${files[@]}"
 shfmt -d -i 2 -ci "${files[@]}"
-for file in config/zsh/zshrc config/zsh/p10k.zsh; do zsh -n "$file"; done
-jq -e . config/docker/daemon.json config/nvim/lazy-lock.json >/dev/null
+for file in dotfiles/zsh/.zshenv dotfiles/zsh/.p10k.zsh dotfiles/zsh/.config/zsh/.zshrc dotfiles/zsh/.config/zsh/aliases.zsh; do zsh -n "$file"; done
+jq -e . config/docker/daemon.json dotfiles/glow/.config/glow/styles/rose-pine.json dotfiles/nvim/.config/nvim/lazy-lock.json dotfiles/dependencies/nvim/package.json dotfiles/dependencies/nvim/package-lock.json >/dev/null
+git config --file dotfiles/git/.config/git/config --list >/dev/null
 bash scripts/vm/list-vm.sh >/dev/null
 docker_key_fingerprint=$(tr -d '[:space:]' <config/docker/docker-key-fingerprint.txt)
 [[ $docker_key_fingerprint =~ ^[[:xdigit:]]{40}$ ]] || die 'Docker key fingerprint must be 40 hexadecimal characters.'

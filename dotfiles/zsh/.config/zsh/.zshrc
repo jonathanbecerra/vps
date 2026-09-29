@@ -8,8 +8,15 @@ if [[ $TERM == xterm-ghostty ]]; then
 fi
 umask 077
 export EDITOR=nvim VISUAL=nvim
+export BAT_THEME="Rosé Pine"
+export EZA_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/eza"
+export RIPGREP_CONFIG_PATH="$HOME/.config/ripgrep/.ripgreprc"
 typeset -U path
 path=(/usr/local/bin "$HOME/.local/bin" $path)
+export NVM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvm"
+for nvm_init in "$NVM_DIR/nvm.sh" /opt/homebrew/opt/nvm/nvm.sh /usr/local/opt/nvm/nvm.sh; do
+  [[ ! -s $nvm_init ]] || { source "$nvm_init"; break; }
+done
 export HISTFILE="$HOME/.zsh_history"
 HISTSIZE=100000
 SAVEHIST=100000
@@ -24,24 +31,9 @@ bindkey '^J' down-line-or-history
 bindkey '^[[A' history-beginning-search-backward
 bindkey '^[[B' history-beginning-search-forward
 
-alias cl='clear'
-alias ll='ls -la'
-alias la='ls -A'
-if (( $+commands[eza] )); then
-  alias ls='eza --icons=auto --group-directories-first'
-  alias ll='eza -la --icons=auto --group-directories-first'
-  alias la='eza -a --icons=auto --group-directories-first'
-fi
-alias vi='nvim'
-alias vim='nvim'
-alias lg='lazygit'
-alias ld='lazydocker'
-alias dc='docker compose'
-alias mat='glow'
-(( $+commands[bat] )) || { (( $+commands[batcat] )) && alias bat='batcat'; }
-(( $+commands[fd] )) || { (( $+commands[fdfind] )) && alias fd='fdfind'; }
+[[ ! -r "$ZDOTDIR/aliases.zsh" ]] || source "$ZDOTDIR/aliases.zsh"
 
-export FZF_DEFAULT_OPTS='--height=40% --layout=reverse --border'
+export FZF_DEFAULT_OPTS='--height=40% --layout=reverse --border --color=fg:#e0def4,bg:#191724,hl:#ebbcba,fg+:#e0def4,bg+:#26233a,hl+:#eb6f92,info:#9ccfd8,prompt:#c4a7e7,pointer:#ebbcba,marker:#31748f,spinner:#f6c177,header:#9ccfd8,border:#403d52'
 if (( $+commands[fzf] )); then
   if fzf --zsh >/dev/null 2>&1; then
     eval "$(fzf --zsh)"
@@ -62,12 +54,16 @@ if [[ -r $prompt_theme ]]; then
   source "$prompt_theme"
   [[ ! -r "$HOME/.p10k.zsh" ]] || source "$HOME/.p10k.zsh"
 else
-  PROMPT='%n@%m %~ %# '
+  PROMPT='%F{#908caa}%n@%m%f %F{#c4a7e7}%~%f %# '
 fi
 [[ ! -r "$HOME/.zshrc.local" ]] || source "$HOME/.zshrc.local"
 
-# Highlighting needs to see the widgets installed above.
-for file in /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+# Autosuggestions wrap shell widgets; syntax highlighting must load last.
+for file in /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh; do
   [[ ! -r $file ]] || { source "$file"; break; }
 done
-unset file prompt_theme
+# Highlighting needs to see the widgets installed above.
+for file in /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+  [[ ! -r $file ]] || { source "$file"; break; }
+done
+unset file nvm_init prompt_theme

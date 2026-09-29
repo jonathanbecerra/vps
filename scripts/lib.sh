@@ -107,6 +107,26 @@ run() {
   fi
 }
 
+fetch_dotfile_plugins() {
+  local skip_nvm=${1:-no} data_dir relative repository commit destination
+  data_dir=${XDG_DATA_HOME:-$HOME/.local/share}
+  install -d -m 0700 "$data_dir"
+  while IFS=$'\t' read -r relative repository commit; do
+    [[ -z $relative || $relative == \#* ]] && continue
+    [[ $skip_nvm == yes && $relative == nvm ]] && continue
+    destination="$data_dir/$relative"
+    if [[ -d $destination/.git && $(git -C "$destination" rev-parse HEAD) == "$commit" ]]; then
+      continue
+    fi
+    [[ ! -e $destination || -d $destination/.git ]] || die "Not a git checkout: $destination"
+    if [[ ! -d $destination/.git ]]; then
+      progress "Clone $relative" git clone -q --filter=blob:none "$repository" "$destination"
+    fi
+    progress "Fetch $relative" git -C "$destination" fetch -q --depth 1 "$repository" "$commit"
+    progress "Select pinned $relative revision" git -C "$destination" checkout -q --detach FETCH_HEAD
+  done <"$ROOT/dotfiles/dependencies/plugins.tsv"
+}
+
 require_root() {
   [[ $(uname -s) == Linux ]] || die 'Run this on the Linux box.'
   [[ $EUID == 0 ]] || die 'Run this with sudo.'
@@ -242,7 +262,7 @@ read_setup_packages() {
   local package
   for package in "${PACKAGES[@]}"; do
     case "$package" in
-      lazygit | lazydocker | yq | glow | eza | deja | nvim) binary_packages+=("$package") ;;
+      cloudflared | git-cliff | lazygit | lazydocker | yq | glow | eza | deja | nvim | lua-language-server | superfile) binary_packages+=("$package") ;;
       *) system_packages+=("$package") ;;
     esac
   done

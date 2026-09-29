@@ -34,6 +34,7 @@ printf '\nDry run: %s (Ubuntu, %s)\n' "$command" "$ARCH"
 printf 'Planned steps only. Prompts and host checks run when DRY_RUN=0.\n'
 
 copy_config() { printf '  %s -> %s\n' "$ROOT/config/$1" "$2"; }
+copy_dotfile() { printf '  %s -> %s\n' "$ROOT/dotfiles/$1" "$2"; }
 
 preview_docker() {
   note 'Remove installed conflicting Docker packages; keep /var/lib/docker.'
@@ -88,6 +89,7 @@ preview_binaries() {
       found=yes
       case "$tool" in
         nvim) destination='/opt/neovim/<version> (linked at /usr/local/bin/nvim)' ;;
+        superfile) destination=/usr/local/bin/spf ;;
         jetbrains-mono) destination=/usr/local/share/fonts/jetbrains-mono ;;
         *) destination="/usr/local/bin/$tool" ;;
       esac
@@ -327,17 +329,43 @@ case "$command" in
     ;;
   install-binaries) preview_binaries "$@" ;;
   install-dotfiles)
-    note 'Fetch the pinned commits in config/zsh/plugins.tsv into ~/.local/share.'
+    data_dir=${XDG_DATA_HOME:-/home/$ADMIN_USER/.local/share}
+    pnpm_spec=$(<"$ROOT/dotfiles/dependencies/nvm/default-packages")
+    pnpm_version=${pnpm_spec#pnpm@}
+    note 'Fetch the pinned commits in dotfiles/dependencies/plugins.tsv into ~/.local/share.'
+    note "Run nvm install $(<"$ROOT/.nvmrc") --skip-default-packages, set it as default, then install pnpm $pnpm_version and locked Neovim tools."
+    run install -d -m 0700 "$data_dir/nvm"
+    run install -m 0644 "$ROOT/dotfiles/dependencies/nvm/default-packages" "$data_dir/nvm/default-packages"
     note 'Back up existing dotfiles to ~/.local/state/vps-backups before linking.'
-    run rm -f "/home/$ADMIN_USER/.bash_history" "/home/$ADMIN_USER/.bash_logout" "/home/$ADMIN_USER/.bashrc"
-    copy_config zsh/zshrc "/home/$ADMIN_USER/.zshrc"
-    copy_config zsh/p10k.zsh "/home/$ADMIN_USER/.p10k.zsh"
-    printf '  Use the pinned Catppuccin Rainbow Mocha preset from /home/%s/.local/share/zsh/catppuccin-powerlevel10k-themes.\n' "$ADMIN_USER"
-    copy_config nvim "/home/$ADMIN_USER/.config/nvim"
-    copy_config tmux/tmux.conf "/home/$ADMIN_USER/.tmux.conf"
+    copy_dotfile zsh/.zshenv "/home/$ADMIN_USER/.zshenv"
+    copy_dotfile zsh/.p10k.zsh "/home/$ADMIN_USER/.p10k.zsh"
+    copy_dotfile zsh/.config/zsh "/home/$ADMIN_USER/.config/zsh"
+    copy_dotfile nvim/.config/nvim "/home/$ADMIN_USER/.config/nvim"
+    copy_dotfile tmux/.config/tmux "/home/$ADMIN_USER/.config/tmux"
+    copy_dotfile tmux/.tmux.conf "/home/$ADMIN_USER/.tmux.conf"
+    copy_dotfile git/.config/git "/home/$ADMIN_USER/.config/git"
+    copy_dotfile eza/.config/eza "/home/$ADMIN_USER/.config/eza"
+    copy_dotfile glow/.config/glow "/home/$ADMIN_USER/.config/glow"
+    copy_dotfile lazydocker/.config/lazydocker "/home/$ADMIN_USER/.config/lazydocker"
+    copy_dotfile lazygit/.config/lazygit "/home/$ADMIN_USER/.config/lazygit"
+    copy_dotfile ripgrep/.config/ripgrep "/home/$ADMIN_USER/.config/ripgrep"
+    copy_dotfile bat/.config/bat "/home/$ADMIN_USER/.config/bat"
+    note 'Build the Rosé Pine bat theme cache when bat or batcat is installed.'
     run deja init zsh
     run nvim --headless '+Lazy! restore' +qa
     [[ ${1:-} != --reload-shell ]] || note 'Enter zsh after installing the dotfiles.'
+    ;;
+  stow-dotfiles)
+    data_dir=${XDG_DATA_HOME:-$HOME/.local/share}
+    packages=(bat eza git glow kitty lazydocker lazygit nvim ripgrep tmux zsh)
+    if (($#)); then packages=("$@"); fi
+    note 'Stow portable dotfile packages into the current home directory. Existing conflicts remain untouched.'
+    run stow --no --dir="$ROOT/dotfiles" --target="$HOME" "${packages[@]}"
+    note 'Fetch the pinned plugin commits in dotfiles/dependencies/plugins.tsv into ~/.local/share.'
+    note 'Skip the pinned nvm checkout on macOS, where Homebrew installs nvm.'
+    run install -d -m 0700 "$data_dir/nvm"
+    run install -m 0644 "$ROOT/dotfiles/dependencies/nvm/default-packages" "$data_dir/nvm/default-packages"
+    note 'Build the Rosé Pine bat theme cache with bat or batcat when either is installed.'
     ;;
   configure-ssh)
     case ${1:-harden} in
