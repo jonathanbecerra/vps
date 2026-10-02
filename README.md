@@ -23,40 +23,64 @@ The root repository configures the box. The `dotfiles/` submodule configures a
 user's shell and editor and can also be used by itself on a Mac or another
 Linux machine.
 
-## 2. Bootstrap the box
+## 2. Bootstrap a remote VPS
 
 Copy the repository to the new host, then run setup as root. The repository is
-moved to `/opt/vps` when setup finishes.
+moved to `/opt/vps` when setup finishes. Replace `HOST` with the host or SSH
+alias you configured.
 
 ```sh
-rsync -av --filter="merge .rsyncignore" ./ root@HOST:/root/vps/
-ssh -t root@HOST 'cd /root/vps && ./setup-vps.sh'
+rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519' ./ root@HOST:/root/vps/
+ssh -t -i ~/.ssh/gh_ed25519 root@HOST 'cd /root/vps && ./setup-vps.sh'
 ```
 
-Keep the first SSH session open. In a second terminal, connect as the new
-`admin` user with its key and finish the SSH handoff:
+Keep that session open. In a second terminal, finish the SSH handoff:
 
 ```sh
-cd /opt/vps
-make configure-ssh
-```
-
-Open a fresh connection before the five-minute rollback expires, then run:
-
-```sh
-cd /opt/vps
-make confirm-ssh
-make sync-time
-make setup-host
+ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make configure-ssh'
+ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make confirm-ssh && make sync-time && make setup-host'
 ```
 
 Use `DRY_RUN=1 make setup-host` to preview host changes. Check the result with
 `make show-status` and reboot when ready.
 
-For a local Ubuntu VM, the same flow is available through `make create-vm`,
-`make start-vm`, and the SSH port shown by the VM command.
+## 3. Bootstrap a local VM
 
-## 3. Add the optional dotfiles
+The local VM forwards SSH to a port between `2222` and `2299`.
+
+```sh
+make list-vm
+make start-vm name=lab display=gui
+```
+
+Replace `lab` with your VM name.
+
+In the VM window, log in as `admin` with the password chosen during creation
+(`password` by default). From your Mac, copy your public key into the VM once:
+
+```sh
+cat ~/.ssh/gh_ed25519.pub | ssh -p 2222 admin@127.0.0.1 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
+```
+
+Then copy the project and run setup:
+
+```sh
+rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/home/admin/vps/
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /home/admin/vps && sudo ./setup-vps.sh'
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /opt/vps && make configure-ssh'
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /opt/vps && make confirm-ssh && make sync-time && make setup-host'
+```
+
+Setup creates `/opt/vps` and moves the project there. Later changes use:
+
+```sh
+rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/opt/vps/
+```
+
+Replace `2222` if your VM uses another forwarded port, or replace the key path
+if your key has a different filename.
+
+## 4. Add the optional dotfiles
 
 On the host, run it from the submodule checkout:
 
@@ -72,7 +96,7 @@ It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
 
-## 4. Add services when you need them
+## 5. Add services when you need them
 
 The box is secure and useful before any application is deployed. Add a service
 under `stacks/<name>/`, include its Compose file in `stacks/compose.yaml`,
@@ -100,7 +124,7 @@ make configure-services
 Point each hostname at the VPS and keep Cloudflare credentials in the local
 `.local` files; they are never committed.
 
-## 5. Make changes safely
+## 6. Make changes safely
 
 Run checks before copying changes to a host:
 
@@ -110,7 +134,7 @@ make preview-deploy HOST=HOST
 make sync-repo HOST=HOST
 ```
 
-For a local VM, pass its SSH key and port to `rsync`. Always sync to
-`/opt/vps`, never the temporary home checkout. Host packages live in
-`config/apt/packages.txt`; the standalone dotfiles repository owns user tools
-and its Homebrew manifest.
+For a local VM, use the forwarded port and key shown in the local VM section.
+Always sync to `/opt/vps` after setup, never the temporary home checkout. Host
+packages live in `config/apt/packages.txt`; the standalone dotfiles repository
+owns user tools and its Homebrew manifest.
