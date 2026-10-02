@@ -78,7 +78,7 @@ setup-host:
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status
 
 install-dotfiles:
-	@bash scripts/os/install-dotfiles.sh
+	@bash scripts/os/install-dotfiles.sh --reload-shell
 
 reload-zsh:
 	@exec env -u ZDOTDIR zsh -l

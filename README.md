@@ -63,11 +63,11 @@ On the host, run it from the submodule checkout:
 ```sh
 cd /opt/vps/dotfiles
 make install
-make reload-zsh
 ```
 
 On a Mac, clone the standalone repository and run the same `make install`
-there. From the VPS root, `make install-dotfiles` calls the same entry point.
+there. Both install commands reload Zsh after Stow completes. From the VPS
+root, `make install-dotfiles` calls the same entry point.
 It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
