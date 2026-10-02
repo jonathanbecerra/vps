@@ -15,6 +15,7 @@ for package in docker.io docker-compose docker-compose-v2 docker-doc docker-buil
   fi
 done
 if ((${#conflicting[@]})); then
+  wait_for_apt
   progress 'Remove conflicting Docker packages' apt-get remove -y "${conflicting[@]}"
 fi
 install -d -m 0755 /etc/apt/keyrings
