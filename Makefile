@@ -81,6 +81,7 @@ install-dotfiles:
 	@bash scripts/os/install-dotfiles.sh --reload-shell
 
 reload-zsh:
+	@printf '\033[<u\033[=0;1u'
 	@exec env -u ZDOTDIR zsh -l
 
 stow-dotfiles:
