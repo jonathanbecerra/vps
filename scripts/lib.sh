@@ -265,9 +265,12 @@ apt_lock_holders() {
 }
 
 wait_for_apt() {
-  local attempt
+  local attempt timeout max_attempts
   [[ ${DRY_RUN:-0} == 1 ]] && return 0
-  for ((attempt = 1; attempt <= 60; attempt++)); do
+  timeout=${APT_LOCK_TIMEOUT:-300}
+  [[ $timeout =~ ^[1-9][0-9]*$ ]] || die 'APT_LOCK_TIMEOUT must be a positive integer.'
+  max_attempts=$(((timeout + 1) / 2))
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     apt_locks_available && return 0
     ((attempt == 1)) && printf 'Waiting for another apt process to finish...\n'
     if ((attempt > 1 && attempt % 10 == 0)); then
@@ -276,7 +279,9 @@ wait_for_apt() {
     fi
     sleep 2
   done
-  die 'APT is still busy after 120 seconds. Check the process holding the apt or dpkg lock, then retry.'
+  printf 'APT lock holders:\n' >&2
+  apt_lock_holders >&2
+  die "APT is still busy after ${timeout} seconds. Check the listed process, then retry."
 }
 
 ensure_time_sync() {
