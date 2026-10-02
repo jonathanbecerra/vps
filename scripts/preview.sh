@@ -11,7 +11,6 @@ SERVER_HOSTNAME='vps-preview'
 ADMIN_USER='admin'
 CADDY_MODE='none'
 VPN='none'
-INSTALL_FONT='yes'
 SECURITY_UPDATES='yes'
 CADDY_ONLY=no
 VPN_ONLY=no
@@ -34,7 +33,6 @@ printf '\nDry run: %s (Ubuntu, %s)\n' "$command" "$ARCH"
 printf 'Planned steps only. Prompts and host checks run when DRY_RUN=0.\n'
 
 copy_config() { printf '  %s -> %s\n' "$ROOT/config/$1" "$2"; }
-copy_dotfile() { printf '  %s -> %s\n' "$ROOT/dotfiles/$1" "$2"; }
 
 preview_docker() {
   note 'Remove installed conflicting Docker packages; keep /var/lib/docker.'
@@ -78,25 +76,6 @@ preview_security() {
   else
     copy_config apt/20manual-upgrades /etc/apt/apt.conf.d/20auto-upgrades
   fi
-}
-
-preview_binaries() {
-  local requested tool arch url checksum _member destination found
-  for requested in "$@"; do
-    found=no
-    while IFS=$'\t' read -r tool arch url checksum _member; do
-      [[ $tool == "$requested" && ($arch == "$ARCH" || $arch == all) ]] || continue
-      found=yes
-      case "$tool" in
-        nvim) destination='/opt/neovim/<version> (linked at /usr/local/bin/nvim)' ;;
-        superfile) destination=/usr/local/bin/spf ;;
-        jetbrains-mono) destination=/usr/local/share/fonts/jetbrains-mono ;;
-        *) destination="/usr/local/bin/$tool" ;;
-      esac
-      printf '  %s -> %s\n    %s\n    SHA256 %s; skip if already installed at this version.\n' "$tool" "$destination" "$url" "$checksum"
-    done <"$ROOT/config/apt/binaries.tsv"
-    [[ $found == yes ]] || die "No pinned binary for $requested on $ARCH"
-  done
 }
 
 preview_image_locks() {
@@ -259,16 +238,16 @@ case "$command" in
     run rm -rf -- "$VM_DIR"
     ;;
   setup-vps)
-    read_setup_packages "$ROOT/config/apt/packages.txt"
+    read_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
-    note "JetBrains Mono=$INSTALL_FONT, automatic security updates=$SECURITY_UPDATES."
+    note "Automatic security updates=$SECURITY_UPDATES."
     note 'Choose Caddy yes or no during setup; run make configure-caddy to add its routes.'
     note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
     upgrade_os
-    install_packages "${system_packages[@]}"
+    install_packages "${PACKAGES[@]}"
     note 'Back up /etc/hosts and set its 127.0.1.1 entry. Create the admin if missing.'
     run useradd --create-home --shell /bin/zsh "$ADMIN_USER"
     printf '  Merge public keys into /home/%s/.ssh/authorized_keys (0600).\n' "$ADMIN_USER"
@@ -279,7 +258,7 @@ case "$command" in
     run install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
     run install -d -m 0700 /data/backups /var/backups/vps-setup
     note "Copy the repo to /opt/vps, owned by $ADMIN_USER. Remove the temporary home checkout after setup succeeds."
-    note 'Pinned tools and the selected font install later with make setup-host.'
+    note 'The optional user environment installs separately with make install-dotfiles.'
     preview_docker
     preview_security
     note 'SSH HANDOFF'
@@ -294,10 +273,10 @@ case "$command" in
     ;;
   install-docker) preview_docker ;;
   install-packages)
-    read_setup_packages "$ROOT/config/apt/packages.txt"
+    read_packages "$ROOT/config/apt/packages.txt"
     note 'Install Ubuntu packages from config/apt/packages.txt.'
     run apt-get update
-    install_packages "${system_packages[@]}"
+    install_packages "${PACKAGES[@]}"
     ;;
   install-wireguard)
     note 'Install WireGuard, make a server key and one client profile, and bring up wg0.'
@@ -321,52 +300,9 @@ case "$command" in
   compose-recreate) preview_compose recreate ;;
   compose-ps) preview_compose ps ;;
   configure-security) preview_security ;;
-  install-tools)
-    read_setup_packages "$ROOT/config/apt/packages.txt"
-    note 'Install the selected tools and font in one run.'
-    printf '  %s\n' "${binary_packages[*]}"
-    preview_binaries "${binary_packages[@]}"
-    ;;
-  install-binaries) preview_binaries "$@" ;;
-  install-dotfiles)
-    data_dir=${XDG_DATA_HOME:-/home/$ADMIN_USER/.local/share}
-    pnpm_spec=$(<"$ROOT/dotfiles/dependencies/nvm/default-packages")
-    pnpm_version=${pnpm_spec#pnpm@}
-    note 'Fetch the pinned commits in dotfiles/dependencies/plugins.tsv into ~/.local/share.'
-    note "Run nvm install $(<"$ROOT/.nvmrc") --skip-default-packages, set it as default, then install pnpm $pnpm_version and locked Neovim tools."
-    run install -d -m 0700 "$data_dir/nvm"
-    run install -m 0644 "$ROOT/dotfiles/dependencies/nvm/default-packages" "$data_dir/nvm/default-packages"
-    note 'Back up existing dotfiles to ~/.local/state/vps-backups before linking.'
-    copy_dotfile zsh/.zshenv "/home/$ADMIN_USER/.zshenv"
-    copy_dotfile zsh/.p10k.zsh "/home/$ADMIN_USER/.p10k.zsh"
-    copy_dotfile zsh/.config/zsh "/home/$ADMIN_USER/.config/zsh"
-    copy_dotfile nvim/.config/nvim "/home/$ADMIN_USER/.config/nvim"
-    copy_dotfile tmux/.config/tmux "/home/$ADMIN_USER/.config/tmux"
-    copy_dotfile tmux/.tmux.conf "/home/$ADMIN_USER/.tmux.conf"
-    copy_dotfile git/.config/git "/home/$ADMIN_USER/.config/git"
-    copy_dotfile eza/.config/eza "/home/$ADMIN_USER/.config/eza"
-    copy_dotfile glow/.config/glow "/home/$ADMIN_USER/.config/glow"
-    copy_dotfile lazydocker/.config/lazydocker "/home/$ADMIN_USER/.config/lazydocker"
-    copy_dotfile lazygit/.config/lazygit "/home/$ADMIN_USER/.config/lazygit"
-    copy_dotfile ripgrep/.config/ripgrep "/home/$ADMIN_USER/.config/ripgrep"
-    copy_dotfile bat/.config/bat "/home/$ADMIN_USER/.config/bat"
-    note 'Build the Rosé Pine bat theme cache when bat or batcat is installed.'
-    run deja init zsh
-    run nvim --headless '+Lazy! restore' +qa
-    [[ ${1:-} != --reload-shell ]] || note 'Enter zsh after installing the dotfiles.'
-    ;;
-  stow-dotfiles)
-    data_dir=${XDG_DATA_HOME:-$HOME/.local/share}
-    packages=(bat eza git glow kitty lazydocker lazygit nvim ripgrep tmux zsh)
-    if (($#)); then packages=("$@"); fi
-    note 'Stow portable dotfile packages into the current home directory. Existing conflicts remain untouched.'
-    run stow --no --dir="$ROOT/dotfiles" --target="$HOME" "${packages[@]}"
-    note 'Fetch the pinned plugin commits in dotfiles/dependencies/plugins.tsv into ~/.local/share.'
-    note 'Skip the pinned nvm checkout on macOS, where Homebrew installs nvm.'
-    run install -d -m 0700 "$data_dir/nvm"
-    run install -m 0644 "$ROOT/dotfiles/dependencies/nvm/default-packages" "$data_dir/nvm/default-packages"
-    note 'Build the Rosé Pine bat theme cache with bat or batcat when either is installed.'
-    ;;
+  install-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/install.sh" "$@" ;;
+  stow-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/stow.sh" "$@" ;;
+  refresh-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/refresh.sh" "$@" ;;
   configure-ssh)
     case ${1:-harden} in
       harden)

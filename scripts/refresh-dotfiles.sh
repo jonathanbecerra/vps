@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-exec bash "${DOTFILES_DIR:-$root/dotfiles}/scripts/stow.sh" "$@"
+exec bash "${DOTFILES_DIR:-$root/dotfiles}/scripts/refresh.sh" "$@"

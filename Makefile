@@ -1,8 +1,11 @@
 .DEFAULT_GOAL := help
 export DRY_RUN HOST STACK
+DOTFILES_DIR ?= $(CURDIR)/dotfiles
+export DOTFILES_DIR
 .PHONY: help
 .PHONY: check-editor check-repo show-status
-.PHONY: install-dotfiles stow-dotfiles install-packages install-tools setup-host update-system
+.PHONY: install-dotfiles stow-dotfiles install-packages setup-host update-system
+.PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
 .PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
 .PHONY: down lock-images recreate restart show-containers up
@@ -24,11 +27,12 @@ help:
 	  'Host tools:' \
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
 	  '  check-repo          Check scripts and configuration' \
-	  '  install-dotfiles    Link configs and enter zsh' \
+	  '  install-dotfiles    Install the optional user environment on Linux or macOS' \
 	  '  stow-dotfiles       Link portable dotfiles packages with scripts/stow.sh' \
-	  '  install-packages    Install Ubuntu packages from config/apt/packages.txt' \
-	  '  install-tools       Install pinned tools from config/apt/binaries.tsv' \
-	  '  setup-host          Install tools, show status, link configs, and enter zsh' \
+	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
+	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
+	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
+	  '  setup-host          Install host packages and show status' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
@@ -68,15 +72,20 @@ help:
 	  '  teardown-vm         Delete the selected VM and its disk'
 
 setup-host:
-	@$(MAKE) --no-print-directory install-tools
+	@$(MAKE) --no-print-directory install-packages
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status
-	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory install-dotfiles
 
 install-dotfiles:
-	@bash scripts/os/install-dotfiles.sh --reload-shell
+	@bash scripts/os/install-dotfiles.sh
 
 stow-dotfiles:
 	@bash scripts/stow.sh
+
+refresh-dotfiles:
+	@bash scripts/refresh-dotfiles.sh $(or $(action),plan) $(if $(paths),--extra-paths "$(paths)")
+
+restore-dotfiles:
+	@bash scripts/refresh-dotfiles.sh restore "$(backup)"
 
 check-editor:
 	@bash scripts/os/check-editor.sh
@@ -102,9 +111,6 @@ update-system:
 
 install-packages:
 	@bash scripts/root.sh scripts/os/install-packages.sh
-
-install-tools:
-	@bash scripts/root.sh scripts/os/install-tools.sh
 
 build-caddy:
 	@bash scripts/compose/build-caddy.sh

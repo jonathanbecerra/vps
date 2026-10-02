@@ -30,7 +30,6 @@ ADMIN_USER=${SUDO_USER:-admin}
 [[ $ADMIN_USER != root ]] || ADMIN_USER='admin'
 CADDY_MODE=none
 VPN=none
-INSTALL_FONT=yes
 SECURITY_UPDATES=yes
 [[ ! -f /etc/vps-setup/host.conf ]] || load_config /etc/vps-setup/host.conf
 [[ -z $config_file ]] || load_config "$config_file"
@@ -52,10 +51,9 @@ case "$caddy_choice" in
   *) die 'Choose yes or no for Caddy.' ;;
 esac
 ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
-ask INSTALL_FONT 'Install JetBrains Mono Nerd Font? yes or no' "$INSTALL_FONT"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
 validate_config
-read_setup_packages "$ROOT/config/apt/packages.txt"
+read_packages "$ROOT/config/apt/packages.txt"
 export SERVER_HOSTNAME ADMIN_USER
 
 if [[ -z $key_file ]]; then
@@ -92,7 +90,6 @@ printf '  %-18s %s\n' 'Admin' "$ADMIN_USER"
 if [[ $CADDY_MODE == docker ]]; then caddy_summary=Docker; else caddy_summary=Off; fi
 printf '  %-18s %s\n' 'Caddy' "$caddy_summary"
 printf '  %-18s %s\n' 'VPN' "$VPN"
-printf '  %-18s %s\n' 'JetBrains Mono' "$INSTALL_FONT"
 printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
@@ -113,7 +110,7 @@ configure_host() {
 
   step 'Update Ubuntu and install base packages'
   upgrade_os
-  install_packages "${system_packages[@]}"
+  install_packages "${PACKAGES[@]}"
   # Install system-wide so sudo and new SSH sessions can find it too.
   backup /etc/hosts
   set_hosts_entry /etc/hosts "$SERVER_HOSTNAME"
@@ -154,7 +151,7 @@ configure_host() {
   fi
   chown -R "$ADMIN_USER:$admin_group" /opt/vps
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 /opt/vps/.local
-  for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
+  for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT SECURITY_UPDATES; do
     printf '%s=%s\n' "$key" "${!key}"
   done >/etc/vps-setup/host.conf
   chmod 0644 /etc/vps-setup/host.conf

@@ -7,7 +7,7 @@ detect_os
 load_config /etc/vps-setup/host.conf
 validate_config
 setup_lock
-read_setup_packages "$ROOT/config/apt/packages.txt"
+read_packages "$ROOT/config/apt/packages.txt"
 begin 'Install packages from config/apt/packages.txt'
 progress 'Refresh Ubuntu package list' apt-get update
-install_packages "${system_packages[@]}"
+install_packages "${PACKAGES[@]}"

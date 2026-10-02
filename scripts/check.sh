@@ -3,19 +3,32 @@
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 preview_if_requested check-repo "$@"
 cd "$ROOT"
+DOTFILES_ROOT=${DOTFILES_DIR:-$ROOT/dotfiles}
+[[ ! -e config/apt/binaries.tsv ]] || die 'Pinned user binaries belong under dotfiles/apt.'
 for tool in bash shellcheck shfmt jq zsh; do
   command -v "$tool" >/dev/null || {
     printf 'Install %s to run make check-repo.\n' "$tool" >&2
     exit 1
   }
 done
-files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/compose/*.sh scripts/deploy/*.sh scripts/vm/*.sh dotfiles/tmux/.config/tmux/choose-session.sh)
+files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/compose/*.sh scripts/deploy/*.sh scripts/vm/*.sh)
 for file in "${files[@]}"; do bash -n "$file"; done
 shellcheck -x "${files[@]}"
 shfmt -d -i 2 -ci "${files[@]}"
-for file in dotfiles/zsh/.zshenv dotfiles/zsh/.p10k.zsh dotfiles/zsh/.config/zsh/.zshrc dotfiles/zsh/.config/zsh/aliases.zsh; do zsh -n "$file"; done
-jq -e . config/docker/daemon.json dotfiles/glow/.config/glow/styles/rose-pine.json dotfiles/nvim/.config/nvim/lazy-lock.json dotfiles/dependencies/nvim/package.json dotfiles/dependencies/nvim/package-lock.json >/dev/null
-git config --file dotfiles/git/.config/git/config --list >/dev/null
+jq -e . config/docker/daemon.json >/dev/null
+if [[ -d $DOTFILES_ROOT ]]; then
+  for file in "$DOTFILES_ROOT/zsh/.zshenv" "$DOTFILES_ROOT/zsh/.p10k.zsh" \
+    "$DOTFILES_ROOT/zsh/.config/zsh/.zprofile" "$DOTFILES_ROOT/zsh/.config/zsh/.zshrc" \
+    "$DOTFILES_ROOT/zsh/.config/zsh/aliases.zsh"; do zsh -n "$file"; done
+  jq -e . "$DOTFILES_ROOT/glow/.config/glow/styles/rose-pine.json" \
+    "$DOTFILES_ROOT/nvim/.config/nvim/lazy-lock.json" \
+    "$DOTFILES_ROOT/deps/nvim/package.json" \
+    "$DOTFILES_ROOT/deps/nvim/package-lock.json" >/dev/null
+  git config --file "$DOTFILES_ROOT/git/.config/git/config" --list >/dev/null
+  awk -F '\t' '$1 !~ /^#/ && NF != 5 { exit 1 }' "$DOTFILES_ROOT/apt/binaries.tsv" || die 'Invalid dotfiles binary manifest.'
+else
+  printf 'Skipping optional dotfiles checks.\n'
+fi
 bash scripts/vm/list-vm.sh >/dev/null
 docker_key_fingerprint=$(tr -d '[:space:]' <config/docker/docker-key-fingerprint.txt)
 [[ $docker_key_fingerprint =~ ^[[:xdigit:]]{40}$ ]] || die 'Docker key fingerprint must be 40 hexadecimal characters.'

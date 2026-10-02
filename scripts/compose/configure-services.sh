@@ -258,7 +258,7 @@ if [[ $caddy_only == no && $VPN != none ]]; then
   fi
 fi
 step 'Save service choices'
-for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT INSTALL_FONT SECURITY_UPDATES; do
+for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT SECURITY_UPDATES; do
   printf '%s=%s\n' "$key" "${!key}"
 done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf

@@ -107,26 +107,6 @@ run() {
   fi
 }
 
-fetch_dotfile_plugins() {
-  local skip_nvm=${1:-no} data_dir relative repository commit destination
-  data_dir=${XDG_DATA_HOME:-$HOME/.local/share}
-  install -d -m 0700 "$data_dir"
-  while IFS=$'\t' read -r relative repository commit; do
-    [[ -z $relative || $relative == \#* ]] && continue
-    [[ $skip_nvm == yes && $relative == nvm ]] && continue
-    destination="$data_dir/$relative"
-    if [[ -d $destination/.git && $(git -C "$destination" rev-parse HEAD) == "$commit" ]]; then
-      continue
-    fi
-    [[ ! -e $destination || -d $destination/.git ]] || die "Not a git checkout: $destination"
-    if [[ ! -d $destination/.git ]]; then
-      progress "Clone $relative" git clone -q --filter=blob:none "$repository" "$destination"
-    fi
-    progress "Fetch $relative" git -C "$destination" fetch -q --depth 1 "$repository" "$commit"
-    progress "Select pinned $relative revision" git -C "$destination" checkout -q --detach FETCH_HEAD
-  done <"$ROOT/dotfiles/dependencies/plugins.tsv"
-}
-
 require_root() {
   [[ $(uname -s) == Linux ]] || die 'Run this on the Linux box.'
   [[ $EUID == 0 ]] || die 'Run this with sudo.'
@@ -208,9 +188,10 @@ load_config() {
   while IFS='=' read -r key value || [[ -n $key ]]; do
     [[ -z $key || $key == \#* ]] && continue
     case "$key" in
-      SERVER_HOSTNAME | ADMIN_USER | CADDY_MODE | VPN | WG_ENDPOINT | INSTALL_FONT | SECURITY_UPDATES)
+      SERVER_HOSTNAME | ADMIN_USER | CADDY_MODE | VPN | WG_ENDPOINT | SECURITY_UPDATES)
         printf -v "$key" '%s' "$value"
         ;;
+      INSTALL_FONT) ;; # Legacy host configs carried this dotfiles setting.
       SERVICES_CONFIGURED) ;;
       *) die "Unknown config key: $key" ;;
     esac
@@ -226,7 +207,7 @@ validate_config() {
     [[ $WG_ENDPOINT =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ && $WG_ENDPOINT != *..* ]] ||
       die 'Set WG_ENDPOINT to a public IPv4 address or DNS name.'
   fi
-  case "${INSTALL_FONT:-}:${SECURITY_UPDATES:-}" in yes:yes | yes:no | no:yes | no:no) ;; *) die 'Use yes or no for INSTALL_FONT and SECURITY_UPDATES.' ;; esac
+  case "${SECURITY_UPDATES:-}" in yes | no) ;; *) die 'Use yes or no for SECURITY_UPDATES.' ;; esac
 }
 
 read_packages() {
@@ -253,20 +234,6 @@ upgrade_os() {
   progress 'Refresh Ubuntu package list' apt-get update
   progress 'Apply Ubuntu updates' env DEBIAN_FRONTEND=noninteractive apt-get \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y
-}
-
-read_setup_packages() {
-  read_packages "$1"
-  system_packages=()
-  binary_packages=()
-  local package
-  for package in "${PACKAGES[@]}"; do
-    case "$package" in
-      cloudflared | git-cliff | lazygit | lazydocker | yq | glow | eza | deja | nvim | lua-language-server | superfile) binary_packages+=("$package") ;;
-      *) system_packages+=("$package") ;;
-    esac
-  done
-  [[ $INSTALL_FONT != yes ]] || binary_packages+=(jetbrains-mono)
 }
 
 backup() {

@@ -1,4 +1,7 @@
 - /.git/
+- /dotfiles/.git
+- /dotfiles/.git/
+- /dotfiles/.local/
 - /.local/
 - /.image-lock.*/
 + /.env.example

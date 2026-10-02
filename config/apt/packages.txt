@@ -1,56 +1,18 @@
-# Ubuntu packages and names from binaries.tsv.
-# Docker/Compose and Tailscale use dedicated setup paths; pnpm is NVM-managed.
-bat
-btop
-build-essential
+# Ubuntu packages required to provision and harden the VPS host.
+# Docker/Compose and WireGuard use dedicated setup paths.
 ca-certificates
-cloc
-cloudflared
-cmake
-coreutils
 curl
-deja
-direnv
-eza
 fail2ban
-fd-find
-fontconfig
-fzf
 gettext-base
-git
-git-cliff
-git-delta
-glow
 gnupg
-inetutils
 jq
-lazydocker
-lazygit
-less
-lua-language-server
-lsof
 make
-ncurses-bin
-nvim
+openssh-client
 openssh-server
 # Required by the configured fail2ban systemd backend.
 python3-systemd
-ripgrep
 rsync
-ruby
-shellcheck
-shfmt
-stow
-superfile
 sudo
-tmux
-tree
 ufw
-unzip
-util-linux
-vivid
-zip
-yq
+unattended-upgrades
 zsh
-zsh-autosuggestions
-zsh-syntax-highlighting
