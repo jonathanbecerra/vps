@@ -1,154 +1,115 @@
 # VPS
 
-Ubuntu only. Run `setup-vps.sh` on the box. After bootstrap, use `/opt/vps`.
+This repository turns a fresh Ubuntu machine into a usable Docker host. It
+sets up the admin account, SSH handoff, updates, Docker and Compose, UFW,
+fail2ban, and automatic security updates. App stacks are added later.
 
-## Mac keys
+## 1. Get the code
 
-Use a separate `<name>_ed25519` key per target: `gh`, `bb`, `bl`, `ht`, `lab`.
-
-```sh
-ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/lab_ed25519
-eval "$(ssh-agent -s)"
-/usr/bin/ssh-add --apple-use-keychain ~/.ssh/lab_ed25519
-pbcopy < ~/.ssh/lab_ed25519.pub
-```
-
-Create `~/.ssh/config` if needed, then add the GitHub key:
-
-```sshconfig
-Host github.com
-  AddKeysToAgent yes
-  UseKeychain yes
-  IdentityFile ~/.ssh/gh_ed25519
-  IdentitiesOnly yes
-```
-
-Pass the target key with `-i` in SSH and rsync commands.
-
-## Local Ubuntu VM
+Clone with the optional user environment included:
 
 ```sh
-make create-vm name=lab
-make start-vm name=lab
+git clone --recurse-submodules git@github.com:jonathanbecerra/vps.git
+cd vps
 ```
 
-Use `display=gui` for a QEMU window. `make attach-vm name=lab` opens only the serial console. Log in as `admin`; the create command shows the password.
-
-From the Mac, copy the key and repo. Change port `2222` if the create command shows another one.
+If the repository is already cloned:
 
 ```sh
-command cat ~/.ssh/lab_ed25519.pub | ssh -i ~/.ssh/lab_ed25519 -p 2222 admin@127.0.0.1 'install -d -m 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/lab_ed25519 -p 2222' ./ admin@127.0.0.1:~/vps/
+git submodule update --init --recursive
 ```
 
-At the VM console:
+The root repository configures the box. The `dotfiles/` submodule configures a
+user's shell and editor and can also be used by itself on a Mac or another
+Linux machine.
+
+## 2. Bootstrap the box
+
+Copy the repository to the new host, then run setup as root. The repository is
+moved to `/opt/vps` when setup finishes.
 
 ```sh
-cd ~/vps
-sudo ./setup-vps.sh --key /home/admin/.ssh/authorized_keys
+rsync -av --filter="merge .rsyncignore" ./ root@HOST:/root/vps/
+ssh -t root@HOST 'cd /root/vps && ./setup-vps.sh'
 ```
 
-Setup moves the repo to `/opt/vps` and removes `~/vps`. Keep this console open. In another Mac terminal, connect as `admin` and run:
+Keep the first SSH session open. In a second terminal, connect as the new
+`admin` user with its key and finish the SSH handoff:
 
 ```sh
-ssh -i ~/.ssh/lab_ed25519 -p 2222 admin@127.0.0.1
 cd /opt/vps
 make configure-ssh
 ```
 
-Open a fresh connection, then confirm SSH and finish host setup:
+Open a fresh connection before the five-minute rollback expires, then run:
 
 ```sh
-ssh -o ControlPath=none -i ~/.ssh/lab_ed25519 -p 2222 admin@127.0.0.1
 cd /opt/vps
 make confirm-ssh
 make setup-host
 ```
 
-Setup asks whether to use Caddy and which VPN to use. To configure Caddy later, run this on the host:
+Use `DRY_RUN=1 make setup-host` to preview host changes. Check the result with
+`make show-status` and reboot when ready.
+
+For a local Ubuntu VM, the same flow is available through `make create-vm`,
+`make start-vm`, and the SSH port shown by the VM command.
+
+## 3. Add the optional dotfiles
+
+On the host, run it from the submodule checkout:
+
+```sh
+cd /opt/vps/dotfiles
+make install
+exec env -u ZDOTDIR zsh -l
+```
+
+On a Mac, clone the standalone repository and run the same `make install`
+there. From the VPS root, `make install-dotfiles` calls the same entry point.
+It does not change host users, SSH, firewalls, Docker, or services. See
+[dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
+cleanup.
+
+## 4. Add services when you need them
+
+The box is secure and useful before any application is deployed. Add a service
+under `stacks/<name>/`, include its Compose file in `stacks/compose.yaml`,
+then lock and start the images:
+
+```sh
+make lock-images
+make up
+make show-containers
+```
+
+Keep app ports behind Caddy and bind any required host port to `127.0.0.1`.
+`make show-status` flags published ports exposed on other addresses. Docker
+forwarding is denied by UFW, and UniFi remains responsible for traffic between
+the network zones.
+
+Caddy is optional and is configured manually after you know the routes:
 
 ```sh
 make configure-caddy
+# edit /opt/vps/.local/caddy-sites.caddy
+make configure-services
 ```
 
-Choose one app or multiple apps. For one app, enter its hostname and, if known, the upstream `host:port`. Leaving the upstream blank creates an editable route and skips startup. Add a `reverse_proxy` or `file_server` with `vim`, then run `make configure-services`.
+Point each hostname at the VPS and keep Cloudflare credentials in the local
+`.local` files; they are never committed.
 
-For multiple apps, the command copies `stacks/caddy/caddy-sites-example.caddy` to `/opt/vps/.local/caddy-sites.caddy` and stops. The example has a web app, a REST API, and a static blog. Edit the file with `vim`, replace the example hostnames and upstreams, then run `make configure-services`. Put blog files in `/data/www/blog`; Caddy reads them at `/srv/blog`.
+## 5. Make changes safely
 
-The top-level Caddyfile imports the route file once. TLS stays inside the site block; the sample uses one wildcard block to cover all three routes in a zone. Add another site block with TLS settings for a different zone. `TZ` is set to `America/New_York` in `.env.example`.
-
-`/data/www` is mounted read-only inside Caddy at `/srv`. For the sample blog, put `index.html` and the rest of the site in `/data/www/blog`; `https://blog.example.com/` serves `/data/www/blog/index.html`. Setup adds a starter page if `index.html` is missing. Keep backups in `/data/backups`, not in the web root.
-
-Edit `/opt/vps/.local/caddy-sites.caddy` to change routes, then run `make configure-services` to apply them. Run `make configure-caddy` to start over; answer `yes` to replace the saved routes or `no` to keep and apply them. Point each hostname's DNS record at the VPS.
-
-`make configure-services` handles the saved Caddy choice, then the saved VPN choice. Use `make configure-tailscale` or `make configure-wireguard` to configure only that VPN.
-
-Create a Cloudflare API token with `Zone:Read` and `DNS:Edit`, limited to the zones used by those hostnames. The token is entered without echo and saved in `/opt/vps/.local/caddy.env` with mode `0600`. UFW is the host firewall: deny incoming and routed traffic by default, allow outbound traffic, then open the detected SSH port and selected services. Caddy opens TCP 80/443 and UDP 443; WireGuard opens UDP 51820. A provider firewall adds defense in depth; if enabled, mirror the intended public services there. On a Pi, allow only public web ports through the router; do not expose SSH, and apply the same policy to IPv6.
-
-## Compose
-
-`stacks/compose.yaml` includes each service Compose file. Add a new file under `stacks/<service>/`, add its path under `include:`, then run `make lock-images`; `stacks/compose.lock.yaml` covers registry images across the included files. Caddy's locally built image pins its base image digests in `stacks/caddy/Dockerfile`.
+Run checks before copying changes to a host:
 
 ```sh
-make up
-make show-containers
-make restart
-make recreate
-make down
-make verify-images
+make check-repo
+make preview-deploy HOST=HOST
+make sync-repo HOST=HOST
 ```
 
-`make down` removes project containers and networks. Bind-mounted data under `/data` stays in place.
-
-Keep new Compose services behind Caddy. Docker-published ports can bypass UFW, so bind any required host ports to `127.0.0.1`; `make show-status` flags published ports bound to other addresses. UFW protects this host and denies forwarding through it; UniFi controls traffic between network zones.
-
-## Hetzner
-
-```sh
-ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/ht_ed25519
-/usr/bin/ssh-add --apple-use-keychain ~/.ssh/ht_ed25519
-pbcopy < ~/.ssh/ht_ed25519.pub
-```
-
-Add the public key when creating the server. Add an alias to `~/.ssh/config`:
-
-```sshconfig
-Host hetzner
-  HostName 203.0.113.10
-  User admin
-  AddKeysToAgent yes
-  UseKeychain yes
-  IdentityFile ~/.ssh/ht_ed25519
-  IdentitiesOnly yes
-```
-
-For a root login, copy the repo and run setup with a TTY. If the provider created an admin user, log in as that user and run setup with `sudo`.
-
-```sh
-ssh -i ~/.ssh/ht_ed25519 root@hetzner 'mkdir -p /root/vps'
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/ht_ed25519' ./ root@hetzner:/root/vps/
-ssh -t -i ~/.ssh/ht_ed25519 root@hetzner 'cd /root/vps && ./setup-vps.sh'
-```
-
-The repo moves to `/opt/vps`. Log in as `admin`, run `make configure-ssh`, confirm from a fresh connection within five minutes, then run `make setup-host`.
-
-## Later changes
-
-Always sync to `/opt/vps`, never `~/vps`:
-
-```sh
-make preview-deploy HOST=hetzner
-make sync-repo HOST=hetzner
-```
-
-For the local VM, include its key and port:
-
-```sh
-rsync -avz --delete-after --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/lab_ed25519 -p 2222' ./ admin@127.0.0.1:/opt/vps/
-```
-
-Packages are in `config/apt/packages.txt`; run `make install-packages` or `make install-tools` after changes. Use `DRY_RUN=1 make setup-host` to preview. Run `make check-repo` before syncing.
-
-Node is pinned in `.nvmrc` and installed through pinned NVM by `make install-dotfiles`; `dotfiles/dependencies/nvm/default-packages` pins pnpm under that Node version. Neovim language tools are pinned in `dotfiles/dependencies/nvim/package-lock.json`.
-
-Portable Rosé Pine configs and their dependency manifests live under `dotfiles/`; use `make stow-dotfiles` on a personal machine (`DRY_RUN=1` previews links). Homebrew tools are listed in `dotfiles/brew/Brewfile`. Ubuntu first-boot setup installs Docker CE and its Compose plugin outside the apt tool list.
+For a local VM, pass its SSH key and port to `rsync`. Always sync to
+`/opt/vps`, never the temporary home checkout. Host packages live in
+`config/apt/packages.txt`; the standalone dotfiles repository owns user tools
+and its Homebrew manifest.
