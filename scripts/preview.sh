@@ -42,7 +42,7 @@ preview_docker() {
   note 'Install only if the primary fingerprint matches config/docker/docker-key-fingerprint.txt.'
   run install -m 0644 '<temporary-key>' /etc/apt/keyrings/docker.asc
   copy_config docker/docker.sources /etc/apt/sources.list.d/docker.sources
-  run apt-get update
+  apt_update
   install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   note 'Merge Docker defaults, validate them, and restart Docker if changed.'
   copy_config docker/daemon.json /etc/docker/daemon.json
@@ -275,12 +275,12 @@ case "$command" in
   install-packages)
     read_packages "$ROOT/config/apt/packages.txt"
     note 'Install Ubuntu packages from config/apt/packages.txt.'
-    run apt-get update
+    apt_update
     install_packages "${PACKAGES[@]}"
     ;;
   install-wireguard)
     note 'Install WireGuard, make a server key and one client profile, and bring up wg0.'
-    run apt-get update
+    apt_update
     install_packages wireguard
     run wg genkey
     run wg pubkey
@@ -379,7 +379,7 @@ case "$command" in
           note 'Ask for the public IPv4 address or DNS name clients can reach.'
           note 'Install wireguard, generate one client profile, open UDP 51820, and start wg-quick@wg0.'
           note 'Save /opt/vps/.local/wireguard-client.conf with mode 0600.'
-          run apt-get update
+          apt_update
           install_packages wireguard
           copy_config wireguard/server.conf /etc/wireguard/wg0.conf
           copy_config wireguard/client.conf /opt/vps/.local/wireguard-client.conf
@@ -460,6 +460,13 @@ case "$command" in
     run docker ps
     note 'Verify UFW is active with deny incoming, allow outgoing, and deny routed policies.'
     note 'Check SSH, Docker port bindings, fail2ban, selected services, pending rollback, and reboot status.'
+    ;;
+  sync-time)
+    note 'Enable systemd-timesyncd, restart it, and wait for NTPSynchronized=yes.'
+    run timedatectl set-ntp true
+    run systemctl enable --now systemd-timesyncd
+    run systemctl restart systemd-timesyncd
+    run timedatectl show -p NTPSynchronized --value
     ;;
   update-system)
     note 'Require SSH confirmation first. Ask before upgrading. Reboot separately when ready.'

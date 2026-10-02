@@ -4,7 +4,7 @@ DOTFILES_DIR ?= $(CURDIR)/dotfiles
 export DOTFILES_DIR
 .PHONY: help
 .PHONY: check-editor check-repo show-status
-.PHONY: install-dotfiles stow-dotfiles install-packages setup-host update-system
+.PHONY: install-dotfiles stow-dotfiles install-packages setup-host sync-time update-system
 .PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
 .PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
@@ -33,6 +33,7 @@ help:
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
 	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
 	  '  setup-host          Install host packages and show status' \
+	  '  sync-time           Synchronize the Ubuntu clock before package work' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
@@ -111,6 +112,9 @@ update-system:
 
 install-packages:
 	@bash scripts/root.sh scripts/os/install-packages.sh
+
+sync-time:
+	@bash scripts/root.sh scripts/os/sync-time.sh
 
 build-caddy:
 	@bash scripts/compose/build-caddy.sh

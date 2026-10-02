@@ -7,6 +7,7 @@ detect_os
 load_config /etc/vps-setup/host.conf
 validate_config
 begin 'Install Docker and Compose'
+ensure_time_sync
 conflicting=()
 for package in docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc; do
   if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true) == 'install ok installed' ]]; then
@@ -34,7 +35,7 @@ fi
 DEB_ARCH=$(dpkg --print-architecture)
 export DEB_ARCH
 render "$ROOT/config/docker/docker.sources" /etc/apt/sources.list.d/docker.sources VERSION_CODENAME DEB_ARCH
-progress 'Refresh Docker package list' apt-get update
+apt_update 'Refresh Docker package list'
 install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 step 'Configure Docker'
 install -d -m 0755 /etc/docker

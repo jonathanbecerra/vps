@@ -46,6 +46,7 @@ Open a fresh connection before the five-minute rollback expires, then run:
 ```sh
 cd /opt/vps
 make confirm-ssh
+make sync-time
 make setup-host
 ```
 

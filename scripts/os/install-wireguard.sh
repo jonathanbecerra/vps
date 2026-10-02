@@ -11,7 +11,7 @@ validate_config
 [[ $ROOT == /opt/vps ]] || die 'Run this from /opt/vps.'
 
 begin 'Set up WireGuard'
-progress 'Refresh Ubuntu package list' apt-get update
+apt_update
 install_packages wireguard
 install -d -m 0700 /etc/wireguard "$ROOT/.local"
 chmod 0700 /etc/wireguard

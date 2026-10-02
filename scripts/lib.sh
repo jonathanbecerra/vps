@@ -226,12 +226,50 @@ read_packages() {
 
 install_packages() {
   (($#)) || return 0
+  ensure_time_sync
   progress 'Install Ubuntu packages' env DEBIAN_FRONTEND=noninteractive apt-get \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y --no-install-recommends "$@"
 }
 
+ensure_time_sync() {
+  local synchronized attempt
+  [[ ${TIME_SYNC_READY:-0} == 1 ]] && return 0
+  synchronized=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)
+  if [[ $synchronized == yes ]]; then
+    TIME_SYNC_READY=1
+    return 0
+  fi
+  if [[ ${DRY_RUN:-0} == 1 ]]; then
+    run timedatectl set-ntp true
+    run systemctl enable --now systemd-timesyncd
+    run systemctl restart systemd-timesyncd
+    TIME_SYNC_READY=1
+    return 0
+  fi
+  progress 'Enable Ubuntu time synchronization' timedatectl set-ntp true
+  progress 'Start Ubuntu time synchronization' systemctl enable --now systemd-timesyncd
+  progress 'Restart Ubuntu time synchronization' systemctl restart systemd-timesyncd
+  attempt=0
+  while ((attempt < 15)); do
+    attempt=$((attempt + 1))
+    synchronized=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)
+    if [[ $synchronized == yes ]]; then
+      TIME_SYNC_READY=1
+      return 0
+    fi
+    sleep 2
+  done
+  die 'Ubuntu time is not synchronized. Run make sync-time and check timedatectl status.'
+}
+
+apt_update() {
+  local label=${1:-Refresh Ubuntu package list}
+  ensure_time_sync
+  progress "$label" apt-get update
+}
+
 upgrade_os() {
-  progress 'Refresh Ubuntu package list' apt-get update
+  apt_update
   progress 'Apply Ubuntu updates' env DEBIAN_FRONTEND=noninteractive apt-get \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y
 }
