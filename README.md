@@ -63,7 +63,7 @@ On the host, run it from the submodule checkout:
 ```sh
 cd /opt/vps/dotfiles
 make install
-exec env -u ZDOTDIR zsh -l
+make reload-zsh
 ```
 
 On a Mac, clone the standalone repository and run the same `make install`

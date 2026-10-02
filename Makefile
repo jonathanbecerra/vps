@@ -4,7 +4,7 @@ DOTFILES_DIR ?= $(CURDIR)/dotfiles
 export DOTFILES_DIR
 .PHONY: help
 .PHONY: check-editor check-repo show-status
-.PHONY: install-dotfiles stow-dotfiles install-packages setup-host sync-time update-system
+.PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host sync-time update-system
 .PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
 .PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
@@ -28,6 +28,7 @@ help:
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
 	  '  check-repo          Check scripts and configuration' \
 	  '  install-dotfiles    Install the optional user environment on Linux or macOS' \
+	  '  reload-zsh          Start a fresh login shell after dotfiles changes' \
 	  '  stow-dotfiles       Link portable dotfiles packages with scripts/stow.sh' \
 	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
@@ -78,6 +79,9 @@ setup-host:
 
 install-dotfiles:
 	@bash scripts/os/install-dotfiles.sh
+
+reload-zsh:
+	@exec env -u ZDOTDIR zsh -l
 
 stow-dotfiles:
 	@bash scripts/stow.sh
