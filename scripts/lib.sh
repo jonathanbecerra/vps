@@ -243,11 +243,12 @@ time_sync_service() {
 }
 
 apt_locks_available() {
-  local lock
+  local lock holders
   for lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
     [[ -e $lock ]] || continue
     if command -v fuser >/dev/null; then
-      fuser "$lock" >/dev/null 2>&1 && return 1
+      holders=$(fuser "$lock" 2>/dev/null || true)
+      [[ -z $holders ]] || return 1
     elif ! flock -n "$lock" -c true 2>/dev/null; then
       return 1
     fi
