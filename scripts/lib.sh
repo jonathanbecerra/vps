@@ -231,24 +231,39 @@ install_packages() {
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y --no-install-recommends "$@"
 }
 
+time_sync_service() {
+  local service
+  for service in systemd-timesyncd chrony chronyd ntpsec ntp openntpd; do
+    [[ $(systemctl show -p LoadState --value "$service.service" 2>/dev/null) == loaded ]] || continue
+    printf '%s\n' "$service"
+    return 0
+  done
+  return 1
+}
+
 ensure_time_sync() {
-  local synchronized attempt
+  local synchronized attempt service
   [[ ${TIME_SYNC_READY:-0} == 1 ]] && return 0
+  command -v timedatectl >/dev/null || die 'Install systemd before installing Ubuntu packages.'
+  command -v systemctl >/dev/null || die 'Install systemd before installing Ubuntu packages.'
   synchronized=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)
   if [[ $synchronized == yes ]]; then
     TIME_SYNC_READY=1
     return 0
   fi
+  service=$(time_sync_service || true)
+  if [[ -z $service && ${DRY_RUN:-0} != 1 ]]; then
+    die 'No NTP service is installed. Install systemd-timesyncd or chrony, then retry.'
+  fi
+  service=${service:-systemd-timesyncd}
   if [[ ${DRY_RUN:-0} == 1 ]]; then
-    run timedatectl set-ntp true
-    run systemctl enable --now systemd-timesyncd
-    run systemctl restart systemd-timesyncd
+    run systemctl enable --now "$service"
+    run systemctl restart "$service"
     TIME_SYNC_READY=1
     return 0
   fi
-  progress 'Enable Ubuntu time synchronization' timedatectl set-ntp true
-  progress 'Start Ubuntu time synchronization' systemctl enable --now systemd-timesyncd
-  progress 'Restart Ubuntu time synchronization' systemctl restart systemd-timesyncd
+  progress "Start Ubuntu time synchronization ($service)" systemctl enable --now "$service"
+  progress "Restart Ubuntu time synchronization ($service)" systemctl restart "$service"
   attempt=0
   while ((attempt < 15)); do
     attempt=$((attempt + 1))
@@ -259,7 +274,7 @@ ensure_time_sync() {
     fi
     sleep 2
   done
-  die 'Ubuntu time is not synchronized. Run make sync-time and check timedatectl status.'
+  die "Ubuntu time is not synchronized. Check $service and run make sync-time."
 }
 
 apt_update() {

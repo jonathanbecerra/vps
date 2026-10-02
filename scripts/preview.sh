@@ -462,10 +462,10 @@ case "$command" in
     note 'Check SSH, Docker port bindings, fail2ban, selected services, pending rollback, and reboot status.'
     ;;
   sync-time)
-    note 'Enable systemd-timesyncd, restart it, and wait for NTPSynchronized=yes.'
-    run timedatectl set-ntp true
-    run systemctl enable --now systemd-timesyncd
-    run systemctl restart systemd-timesyncd
+    service=$(time_sync_service || printf '%s' systemd-timesyncd)
+    note "Start $service and wait for NTPSynchronized=yes."
+    run systemctl enable --now "$service"
+    run systemctl restart "$service"
     run timedatectl show -p NTPSynchronized --value
     ;;
   update-system)
