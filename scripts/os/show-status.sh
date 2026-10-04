@@ -25,6 +25,7 @@ firewall_status=$(LC_ALL=C ufw status verbose)
 printf '%s\n' "$firewall_status"
 grep -qx 'Status: active' <<<"$firewall_status" || failed=1
 grep -Eq '^Default: deny \(incoming\), allow \(outgoing\), deny \(routed\)$' <<<"$firewall_status" || failed=1
+printf '\n'
 fail2ban-client status sshd || failed=1
 note 'SSH settings in use'
 policy=$(/usr/sbin/sshd -T -C "user=$ADMIN_USER,host=$SERVER_HOSTNAME,addr=127.0.0.1")
@@ -37,11 +38,17 @@ if [[ -d /var/lib/vps-setup/ssh-pending ]]; then
   systemctl list-timers vps-rollback-ssh.timer --no-pager
   failed=1
 fi
-note 'Listening ports'
+note 'Listening ports (host processes)'
 ss -tulnp
-note 'Containers'
+note 'Docker Compose projects'
 docker compose ls
-docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+note 'Docker containers'
+container_rows=$(docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}')
+if [[ -n $container_rows ]]; then
+  printf 'NAME\tSTATUS\tPORTS\n%s\n' "$container_rows"
+else
+  printf 'None running.\n'
+fi
 mapfile -t container_ids < <(docker ps -q)
 if ((${#container_ids[@]})); then
   public_bindings=$(docker inspect "${container_ids[@]}" | jq -r '

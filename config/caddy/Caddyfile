@@ -11,4 +11,10 @@
 	}
 }
 
+(conceal) {
+	file_server {
+		hide .git .git/* .env .env.* *.pem *.key *.log .DS_Store *.swp *.bak *.map
+	}
+}
+
 import /etc/caddy/sites-enabled/*.caddy

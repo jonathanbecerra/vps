@@ -177,12 +177,15 @@ config/caddy/www/<domain>/
     └── 500.html
 ```
 
-Static sites use Caddy's `file_server` with a `hide` block for repository
-metadata, environment files, keys, and logs. Each site also gets custom error
-pages under `/var/www/<domain>/errors/`. Docker applications should bind to
-loopback and use a `reverse_proxy` block in the Caddy site. Replace the
-example site in `/etc/caddy/sites-available/example.com.caddy` when you are
-ready to add a real domain.
+Static sites should import the reusable `conceal` snippet from the parent
+Caddyfile. It hides repository metadata, environment files, keys, logs,
+editor files, backups, and source maps. For Astro, Angular, React, or similar
+builds, point `root` at `/var/www/<domain>/dist`; Caddy then serves only that
+directory, not its parent. Each site also gets custom error pages under
+`/var/www/<domain>/errors/`. Docker applications should bind to loopback and
+use a `reverse_proxy` block in the Caddy site. Replace the example site in
+`/etc/caddy/sites-available/example.com.caddy` when you are ready to add a
+real domain.
 
 The custom binary includes the Cloudflare DNS module. Add the Cloudflare token
 to `/etc/caddy/caddy.env` only when a site needs DNS-01 certificates. Caddy

@@ -40,6 +40,7 @@ if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
   cat >"$site_file" <<'EOF'
 :80 {
   import security
+  import conceal
   root * /var/www/example.com
 
   handle_errors {
@@ -47,9 +48,6 @@ if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
     file_server
   }
 
-  file_server {
-    hide .git .git/* .env .env.* *.pem *.key *.log
-  }
 }
 EOF
   chown root:"$caddy_user" "$site_file"
