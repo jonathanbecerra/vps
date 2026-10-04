@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested configure-security "$@"
 require_root
 detect_os
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 
 begin 'Configure firewall and login protection'

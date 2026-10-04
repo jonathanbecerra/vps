@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested install-docker "$@"
 require_root
 detect_os
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 begin 'Install Docker and Compose'
 ensure_time_sync

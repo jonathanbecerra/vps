@@ -5,6 +5,11 @@ export ROOT
 WG_ENDPOINT=
 CADDY_MODE=none
 CADDY_CONFIG=/etc/caddy/caddy.conf
+VPS_CONFIG_DIR=/etc/vps
+# Used by scripts that source this library.
+# shellcheck disable=SC2034
+VPS_HOST_CONFIG=$VPS_CONFIG_DIR/host.conf
+LEGACY_VPS_CONFIG_DIR=/etc/vps-setup
 C_RESET='' C_CYAN='' C_GREEN='' C_RED='' C_YELLOW=''
 if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
   C_RESET=$'\033[0m'
@@ -123,6 +128,10 @@ require_root() {
   [[ -d /run/systemd/system ]] || die 'This needs systemd running.'
 }
 
+migrate_legacy_config() {
+  [[ -e $VPS_CONFIG_DIR || ! -e $LEGACY_VPS_CONFIG_DIR ]] || mv "$LEGACY_VPS_CONFIG_DIR" "$VPS_CONFIG_DIR"
+}
+
 detect_os() {
   # shellcheck source=/dev/null
   source /etc/os-release
@@ -217,6 +226,7 @@ write_caddy_config() {
 
 load_config() {
   local file=$1 key value
+  migrate_legacy_config
   [[ -f $file ]] || die "Config not found: $file"
   while IFS='=' read -r key value || [[ -n $key ]]; do
     [[ -z $key || $key == \#* ]] && continue

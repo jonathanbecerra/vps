@@ -24,6 +24,7 @@ detect_os
 [[ -t 0 ]] || die 'Run setup in a terminal. It asks for a few choices and the sudo password.'
 setup_lock
 [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Confirm or roll back the pending SSH change first.'
+migrate_legacy_config
 
 SERVER_HOSTNAME=$(hostname -s)
 ADMIN_USER=${SUDO_USER:-admin}
@@ -31,7 +32,7 @@ ADMIN_USER=${SUDO_USER:-admin}
 CADDY_MODE=none
 VPN=none
 SECURITY_UPDATES=yes
-[[ ! -f /etc/vps-setup/host.conf ]] || load_config /etc/vps-setup/host.conf
+[[ ! -f $VPS_HOST_CONFIG ]] || load_config "$VPS_HOST_CONFIG"
 [[ -z $config_file ]] || load_config "$config_file"
 
 begin 'Set up this Ubuntu box'
@@ -67,7 +68,7 @@ done
 if command -v snap >/dev/null && snap list docker &>/dev/null; then
   die 'Docker is installed through Snap. Back up its data and remove the snap before rerunning setup.'
 fi
-if [[ ! -f /etc/vps-setup/host.conf ]] && command -v docker >/dev/null && docker info &>/dev/null; then
+if [[ ! -f $VPS_HOST_CONFIG ]] && command -v docker >/dev/null && docker info &>/dev/null; then
   [[ -z $(docker ps -aq) ]] || die 'This host already has containers. Back up and migrate them before first-time provisioning.'
 fi
 
@@ -103,7 +104,7 @@ configure_host() {
   step 'Update Ubuntu and install base packages'
   upgrade_os
   install_packages "${PACKAGES[@]}"
-  if [[ ! -f /etc/vps-setup/host.conf ]]; then
+  if [[ ! -f $VPS_HOST_CONFIG ]]; then
     step 'Enable temporary SSH password access'
     set_sshd_password_auth yes
     progress 'Reload SSH' systemctl reload "$(ssh_service)"
@@ -136,7 +137,7 @@ configure_host() {
   usermod -s "$(command -v zsh)" "$ADMIN_USER"
 
   step 'Set up /opt/vps and /data'
-  install -d -m 0755 /data /etc/caddy /etc/vps-setup /var/lib/vps-setup
+  install -d -m 0755 /data /etc/caddy "$VPS_CONFIG_DIR" /var/lib/vps-setup
   install -d -m 0700 /data/backups /var/backups/vps-setup
   [[ ! -L /opt/vps ]] || die '/opt/vps must be a directory, not a symlink.'
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /opt/vps
@@ -147,8 +148,8 @@ configure_host() {
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 /opt/vps/.local
   for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
     printf '%s=%s\n' "$key" "${!key}"
-  done >/etc/vps-setup/host.conf
-  chmod 0644 /etc/vps-setup/host.conf
+  done >"$VPS_HOST_CONFIG"
+  chmod 0644 "$VPS_HOST_CONFIG"
   write_caddy_config
 
   progress 'Install Docker and Compose' bash "$ROOT/scripts/os/install-docker.sh"

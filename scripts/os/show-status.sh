@@ -3,7 +3,7 @@
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested show-status "$@"
 require_root
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 failed=0
 begin 'Host status'

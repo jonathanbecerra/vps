@@ -3,7 +3,7 @@
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested configure-services "$@"
 [[ $(uname -s) == Linux ]] || die 'Run service commands on the Linux host, or use make apply-stack HOST=... STACK=tailscale'
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 action=${1:-configure}
 stack=${2:-}
 if [[ $action == configure ]]; then
@@ -99,8 +99,8 @@ if [[ $VPN == tailscale && ! -f $ROOT/.local/tailscale.env ]]; then
 fi
 for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
   printf '%s=%s\n' "$key" "${!key}"
-done >/etc/vps-setup/host.conf
-chmod 0644 /etc/vps-setup/host.conf
+done >"$VPS_HOST_CONFIG"
+chmod 0644 "$VPS_HOST_CONFIG"
 
 if [[ $VPN == tailscale ]]; then
   chown "$ADMIN_USER:$admin_group" "$ROOT/.local/tailscale.env"

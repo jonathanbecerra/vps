@@ -5,7 +5,7 @@ action=${1:?Choose up, down, restart, recreate, or ps}
 case "$action" in up | down | restart | recreate | ps) ;; *) die 'Choose up, down, restart, recreate, or ps.' ;; esac
 preview_if_requested "compose-$action" "$@"
 [[ $(uname -s) == Linux ]] || die 'Run this command on the Linux host.'
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 [[ $ROOT == /opt/vps ]] || die 'Run this command from /opt/vps.'
 begin 'Docker Compose'

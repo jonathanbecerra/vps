@@ -198,7 +198,7 @@ boot, and applies the role selected during first setup:
 | `none` | Does not install or start Caddy. | Application-only hosts such as a Pi running Scrypted. |
 
 New hosts default to `none`; public ingress is always an explicit choice. The
-role is stored in `/etc/caddy/caddy.conf`; `/etc/vps-setup/host.conf` stores
+role is stored in `/etc/caddy/caddy.conf`; `/etc/vps/host.conf` stores
 host and VPN settings only. If an older host has no Caddy role file,
 `make setup-host` asks once and defaults safely to private ingress. The
 Cloudflare token belongs in `/etc/caddy/caddy.env`.

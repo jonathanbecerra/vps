@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested install-packages "$@"
 require_root
 detect_os
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 setup_lock
 read_packages "$ROOT/config/apt/packages.txt"

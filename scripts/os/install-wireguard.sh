@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested install-wireguard "$@"
 require_root
 detect_os
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 [[ $VPN == wireguard ]] || die 'Choose WireGuard with make configure-services first.'
 [[ -n $WG_ENDPOINT ]] || die 'Set a public endpoint with make configure-services vpn=wireguard first.'

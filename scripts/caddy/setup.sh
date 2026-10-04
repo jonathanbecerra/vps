@@ -6,7 +6,7 @@ require_root
 detect_os
 [[ $ROOT == /opt/vps ]] || die 'Run this command from /opt/vps.'
 [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Confirm SSH access before configuring services.'
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 setup_lock
 
@@ -17,9 +17,9 @@ if [[ ! -f $CADDY_CONFIG ]]; then
   write_caddy_config
 fi
 
-if [[ -f /etc/vps-setup/host.conf ]] && grep -Eq '^[[:space:]]*CADDY_MODE=' /etc/vps-setup/host.conf; then
-  backup /etc/vps-setup/host.conf
-  sed -Ei '/^[[:space:]]*CADDY_MODE=/d' /etc/vps-setup/host.conf
+if [[ -f $VPS_HOST_CONFIG ]] && grep -Eq '^[[:space:]]*CADDY_MODE=' "$VPS_HOST_CONFIG"; then
+  backup "$VPS_HOST_CONFIG"
+  sed -Ei '/^[[:space:]]*CADDY_MODE=/d' "$VPS_HOST_CONFIG"
 fi
 
 if [[ $CADDY_MODE == none ]]; then

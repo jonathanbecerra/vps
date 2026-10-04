@@ -12,7 +12,7 @@ ADMIN_USER='admin'
 CADDY_MODE='none'
 VPN='none'
 SECURITY_UPDATES='yes'
-if [[ -z ${HOST:-} && -r /etc/vps-setup/host.conf ]]; then load_config /etc/vps-setup/host.conf; fi
+if [[ -z ${HOST:-} && -r $VPS_HOST_CONFIG ]]; then load_config "$VPS_HOST_CONFIG"; fi
 key_file='<public-key-file>'
 if [[ $command == setup-vps ]]; then
   while (($#)); do
@@ -239,7 +239,7 @@ case "$command" in
     run visudo -cf /etc/sudoers.d/90-vps-admin
     note 'Prompt for a sudo password if the account has none.'
     run usermod -s /bin/zsh "$ADMIN_USER"
-    run install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
+    run install -d -m 0755 /data /etc/caddy "$VPS_CONFIG_DIR" /var/lib/vps-setup
     run install -d -m 0700 /data/backups /var/backups/vps-setup
     note "Copy the repo to /opt/vps, owned by $ADMIN_USER. Remove the temporary home checkout after setup succeeds."
     note 'The optional user environment installs separately with make install-dotfiles.'

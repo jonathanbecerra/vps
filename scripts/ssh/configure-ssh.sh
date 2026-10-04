@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested configure-ssh "$@"
 require_root
 setup_lock
-load_config /etc/vps-setup/host.conf
+load_config "$VPS_HOST_CONFIG"
 validate_config
 pending=/var/lib/vps-setup/ssh-pending
 bootstrap_password_config=/etc/ssh/sshd_config.d/00-bootstrap-password.conf
