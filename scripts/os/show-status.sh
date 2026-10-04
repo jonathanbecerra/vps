@@ -55,8 +55,13 @@ if ((${#container_ids[@]})); then
   fi
 fi
 if [[ $CADDY_MODE == docker ]]; then
-  caddy_container=$(compose --profile caddy ps --status running --quiet caddy)
-  [[ -n $caddy_container ]] || failed=1
+  if [[ ! -f $ROOT/.local/caddy.env ]]; then
+    note 'Caddy is selected but not configured.'
+    printf '\tRun:\n\t\tmake configure-caddy\n'
+  else
+    caddy_container=$(compose --profile caddy ps --status running --quiet caddy)
+    [[ -n $caddy_container ]] || failed=1
+  fi
 fi
 if [[ $VPN == tailscale ]]; then
   compose --profile tailscale exec -T tailscale tailscale status || failed=1

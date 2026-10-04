@@ -57,11 +57,9 @@ read_packages "$ROOT/config/apt/packages.txt"
 export SERVER_HOSTNAME ADMIN_USER
 
 if [[ -z $key_file ]]; then
-  key_default=/root/.ssh/authorized_keys
-  if id "$ADMIN_USER" &>/dev/null; then
-    user_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
-    [[ ! -s $user_home/.ssh/authorized_keys ]] || key_default="$user_home/.ssh/authorized_keys"
-  fi
+  key_user=${SUDO_USER:-root}
+  key_home=$(getent passwd "$key_user" | cut -d: -f6)
+  key_default="$key_home/.ssh/authorized_keys"
   ask key_file 'Public SSH key file' "$key_default"
 fi
 [[ -s $key_file ]] || die "No public keys found at $key_file"
@@ -137,9 +135,6 @@ configure_host() {
     passwd "$ADMIN_USER"
   fi
   usermod -s "$(command -v zsh)" "$ADMIN_USER"
-  if [[ ! -e $user_home/.zshrc ]]; then
-    install -o "$ADMIN_USER" -g "$admin_group" -m 0644 /dev/null "$user_home/.zshrc"
-  fi
 
   step 'Set up /opt/vps and /data'
   install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
@@ -161,7 +156,7 @@ configure_host() {
 }
 
 setup_pid=$BASHPID
-progress "Set up $SERVER_HOSTNAME" configure_host
+progress "Set up $SERVER_HOSTNAME" --interactive configure_host
 printf '\n  %s✓%s Hostname and hosts file\n' "$C_GREEN" "$C_RESET"
 printf '  %s✓%s Ubuntu packages and updates\n' "$C_GREEN" "$C_RESET"
 printf '  %s✓%s Admin account, sudo, and SSH key\n' "$C_GREEN" "$C_RESET"

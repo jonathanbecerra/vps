@@ -16,6 +16,7 @@ case ${DRY_RUN:-0} in
     ;;
 esac
 pending=/var/lib/vps-setup/ssh-pending
+bootstrap_password_config=/etc/ssh/sshd_config.d/00-bootstrap-password.conf
 [[ -d $pending ]] || exit 0
 exec 8>/run/vps-ssh.lock
 flock 8
@@ -25,6 +26,9 @@ if [[ -f $pending/vps-setup.conf ]]; then
   cp -a "$pending/vps-setup.conf" /etc/ssh/vps-setup.conf
 else
   rm -f /etc/ssh/vps-setup.conf
+fi
+if [[ -f $pending/bootstrap-password.conf ]]; then
+  cp -a "$pending/bootstrap-password.conf" "$bootstrap_password_config"
 fi
 /usr/sbin/sshd -t
 service=$(cat "$pending/service")

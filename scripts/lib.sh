@@ -38,12 +38,20 @@ begin() {
 step() { printf '\n%s›%s %s\n' "$C_CYAN" "$C_RESET" "$*"; }
 
 progress() {
-  local label=$1 log status frame=0 pid
+  local label=$1 log status frame=0 pid interactive=0
   # Braille frames work in the terminals used for SSH and the local console.
   local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴')
   shift
+  if [[ ${1:-} == --interactive ]]; then
+    interactive=1
+    shift
+  fi
   if [[ ${DRY_RUN:-0} == 1 ]]; then
     run "$@"
+    return
+  fi
+  if ((interactive)); then
+    "$@"
     return
   fi
   log=$(mktemp)
