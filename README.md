@@ -25,6 +25,38 @@ Linux machine.
 
 ## 2. Bootstrap a remote VPS
 
+### Temporary password bootstrap
+
+If a fresh Ubuntu image has no authorized key, log in on the local console and create this temporary file:
+
+```sh
+sudo vim /etc/ssh/sshd_config.d/00-bootstrap-password.conf
+```
+
+Set its contents to:
+
+```text
+PasswordAuthentication yes
+```
+
+Reload SSH:
+
+```sh
+sudo sshd -t && sudo systemctl restart ssh
+```
+
+Copy the Mac key over port 22. Port 2222 is only for the local VM flow below:
+
+```sh
+cat ~/.ssh/gh_ed25519.pub | ssh -p 22 \
+  -o PubkeyAuthentication=no \
+  -o PreferredAuthentications=password \
+  ubuntu@HOST \
+  'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
+```
+
+`make configure-ssh` removes this file after key-only SSH passes. If the handoff rolls back, it restores the file.
+
 Copy the repository to the new host, then run setup as root. The repository is
 moved to `/opt/vps` when setup finishes. Replace `HOST` with the host or SSH
 alias you configured.
@@ -39,6 +71,18 @@ Keep that session open. In a second terminal, finish the SSH handoff:
 ```sh
 ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make configure-ssh'
 ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make confirm-ssh && make sync-time && make setup-host'
+```
+
+After hardening, log in with the admin account and key on port 22:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@HOST
+```
+
+For the Pi used during setup:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@10.10.90.159
 ```
 
 Use `DRY_RUN=1 make setup-host` to preview host changes. Check the result with
