@@ -37,6 +37,7 @@ SECURITY_UPDATES=yes
 begin 'Set up this Ubuntu box'
 ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
 ask ADMIN_USER 'Admin username' "$ADMIN_USER"
+ask CADDY_MODE 'Caddy role? public, private, or none' "$CADDY_MODE"
 ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
 validate_config
@@ -72,13 +73,17 @@ fi
 printf '\n%sReview setup%s\n' "$C_CYAN" "$C_RESET"
 printf '  %-18s %s\n' 'Hostname' "$SERVER_HOSTNAME"
 printf '  %-18s %s\n' 'Admin' "$ADMIN_USER"
-if [[ $CADDY_MODE == service ]]; then caddy_summary=Service; else caddy_summary=Off; fi
+case $CADDY_MODE in
+  public) caddy_summary='Public ingress' ;;
+  private) caddy_summary='Private ingress' ;;
+  none) caddy_summary='Off' ;;
+esac
 printf '  %-18s %s\n' 'Caddy' "$caddy_summary"
 printf '  %-18s %s\n' 'VPN' "$VPN"
 printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
-printf '  make setup-host installs Caddy; make configure-services applies VPN choices.\n'
+printf '  make setup-host applies the selected Caddy role; make configure-services applies VPN choices.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
 

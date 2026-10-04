@@ -16,7 +16,7 @@ note 'Failed systemd units'
 systemctl --failed --no-pager
 [[ -z $(systemctl --failed --no-legend --plain) ]] || failed=1
 services=("$(ssh_service)" docker fail2ban ufw)
-[[ $CADDY_MODE != service ]] || services+=(caddy)
+[[ $CADDY_MODE == none ]] || services+=(caddy)
 for service in "${services[@]}"; do
   if ! systemctl is-active "$service"; then failed=1; fi
 done
@@ -63,7 +63,7 @@ if ((${#container_ids[@]})); then
     failed=1
   fi
 fi
-if [[ $CADDY_MODE == service ]]; then
+if [[ $CADDY_MODE != none ]]; then
   if [[ ! -x /usr/local/bin/caddy || ! -f /etc/caddy/Caddyfile ]]; then
     note 'Caddy is selected but not configured.'
     printf '\tRun:\n\t\tmake setup-host\n'

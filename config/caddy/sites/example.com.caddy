@@ -1,0 +1,12 @@
+:80 {
+  import security
+  import conceal
+  root * /var/www/example.com
+
+  handle_errors {
+    rewrite * /errors/{err.status_code}.html
+    file_server
+  }
+
+  file_server
+}

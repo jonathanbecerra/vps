@@ -225,7 +225,7 @@ case "$command" in
     read_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "Automatic security updates=$SECURITY_UPDATES."
-    note 'make setup-host synchronizes time, installs the host, and installs Caddy as a native service with the Cloudflare DNS module.'
+    note 'make setup-host synchronizes time, installs the host, and applies the selected Caddy role.'
     note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
@@ -277,12 +277,32 @@ case "$command" in
     ;;
   build-caddy) preview_caddy_build ;;
   setup-caddy)
-    note 'Install the native Caddy binary, service unit, and Cloudflare DNS module.'
-    note 'Create the enabled example.com site, /var/www/example.com, hello-world page, custom errors, and UFW rules for 80/443.'
-    preview_caddy_build
-    run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
-    run install -d -m 0755 /var/www/example.com/errors
-    run systemctl enable --now caddy
+    case $CADDY_MODE in
+      none)
+        note 'Caddy is disabled for this host.'
+        ;;
+      public)
+        note 'Install native Caddy with the Cloudflare DNS module for public ingress.'
+        note 'Create the enabled example.com file-server site, /var/www/example.com, custom errors, and UFW rules for 80/443.'
+        preview_caddy_build
+        run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
+        run install -d -m 0755 /var/www/example.com/errors
+        run ufw allow 80/tcp comment 'Caddy HTTP'
+        run ufw allow 443/tcp comment 'Caddy HTTPS'
+        run ufw allow 443/udp comment 'Caddy HTTP3'
+        run systemctl enable --now caddy
+        ;;
+      private)
+        note 'Install native Caddy with the Cloudflare DNS module for private ingress.'
+        note 'Create hono.ohmstack.net, copy the Hono app to /var/app/hono, bind it to loopback:3000, and allow Caddy only on the private interface.'
+        preview_caddy_build
+        run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled /var/app/hono
+        run docker compose -f /var/app/hono/compose.yaml up -d --build
+        run ufw allow in on '<private-interface>' to any port 80 proto tcp comment 'Caddy HTTP (private)'
+        run ufw allow in on '<private-interface>' to any port 443 proto tcp comment 'Caddy HTTPS (private)'
+        run systemctl enable --now caddy
+        ;;
+    esac
     ;;
   lock-images) preview_image_locks lock ;;
   verify-images) preview_image_locks verify ;;

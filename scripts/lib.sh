@@ -197,7 +197,11 @@ load_config() {
     case "$key" in
       SERVER_HOSTNAME | ADMIN_USER | CADDY_MODE | VPN | WG_ENDPOINT | SECURITY_UPDATES)
         printf -v "$key" '%s' "$value"
-        [[ $key != CADDY_MODE || $value != docker ]] || CADDY_MODE=service
+        if [[ $key == CADDY_MODE ]]; then
+          case $value in
+            docker | service) CADDY_MODE=public ;;
+          esac
+        fi
         ;;
       INSTALL_FONT) ;; # Legacy host configs carried this dotfiles setting.
       SERVICES_CONFIGURED) ;;
@@ -209,7 +213,7 @@ load_config() {
 validate_config() {
   [[ ${SERVER_HOSTNAME:-} =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die 'Use a short hostname, lowercase letters, numbers, and hyphens.'
   [[ ${ADMIN_USER:-} =~ ^[a-z_][a-z0-9_-]{0,30}$ && $ADMIN_USER != root ]] || die 'Pick a regular Linux username, not root.'
-  case "${CADDY_MODE:-}" in service | none) ;; *) die 'CADDY_MODE must be service or none.' ;; esac
+  case "${CADDY_MODE:-}" in public | private | none) ;; *) die 'CADDY_MODE must be public, private, or none.' ;; esac
   case "${VPN:-}" in tailscale | wireguard | none) ;; *) die 'VPN must be tailscale, wireguard, or none.' ;; esac
   if [[ $VPN == wireguard && -n $WG_ENDPOINT ]]; then
     [[ $WG_ENDPOINT =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ && $WG_ENDPOINT != *..* ]] ||

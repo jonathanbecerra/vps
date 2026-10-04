@@ -1,0 +1,15 @@
+{
+  "name": "hono-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.12",
+    "hono": "4.13.12"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

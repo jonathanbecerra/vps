@@ -33,7 +33,7 @@ help:
 	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
 	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
-	  '  setup-host          Synchronize time, install the host, Caddy, and show status' \
+	  '  setup-host          Synchronize time, install the host, selected Caddy role, and show status' \
 	  '  sync-time           Synchronize the Ubuntu clock before package work' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
