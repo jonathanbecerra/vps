@@ -10,6 +10,27 @@ load_config "$VPS_HOST_CONFIG"
 validate_config
 setup_lock
 
+clear_caddy_ufw_rules() {
+  local rule
+  local -a rules=()
+  mapfile -t rules < <(
+    ufw status numbered |
+      sed -nE '/# Caddy (HTTP|HTTPS|HTTP3)/s/^[[:space:]]*\[[[:space:]]*([0-9]+)\].*/\1/p' |
+      sort -rn
+  )
+  for rule in "${rules[@]}"; do
+    ufw --force delete "$rule" >/dev/null
+  done
+}
+
+disable_bootstrap_site() {
+  local link=$1 target
+  [[ -L $link ]] || return 0
+  target=$(readlink "$link")
+  [[ $target == "../sites-available/${link##*/}" ]] || return 0
+  rm -f -- "$link"
+}
+
 if [[ ! -f $CADDY_CONFIG ]]; then
   [[ $CADDY_MODE != public ]] || CADDY_MODE=private
   ask CADDY_MODE 'Caddy role? public, private, or none' "$CADDY_MODE"
@@ -23,6 +44,10 @@ if [[ -f $VPS_HOST_CONFIG ]] && grep -Eq '^[[:space:]]*CADDY_MODE=' "$VPS_HOST_C
 fi
 
 if [[ $CADDY_MODE == none ]]; then
+  clear_caddy_ufw_rules
+  disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
+  disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
+  systemctl disable --now caddy 2>/dev/null || true
   note 'Caddy is disabled for this host.'
   exit 0
 fi
@@ -61,27 +86,27 @@ setup_hono() {
 }
 
 if [[ $CADDY_MODE == public ]]; then
+  disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
   if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
     site_file=/etc/caddy/sites-available/example.com.caddy
     install -d -o "$ADMIN_USER" -g "$caddy_user" -m 0755 /var/www/example.com /var/www/example.com/errors
-    install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
+    [[ -f /var/www/example.com/index.html ]] || install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
       "$ROOT/config/caddy/www/example.com/index.html" /var/www/example.com/index.html
     for status in 404 500; do
-      install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
+      [[ -f /var/www/example.com/errors/$status.html ]] || install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
         "$ROOT/config/caddy/www/example.com/errors/$status.html" "/var/www/example.com/errors/$status.html"
     done
-    install -o root -g "$caddy_user" -m 0644 \
+    [[ -e $site_file ]] || install -o root -g "$caddy_user" -m 0644 \
       "$ROOT/config/caddy/sites/example.com.caddy" "$site_file"
     ln -sfn "../sites-available/$(basename "$site_file")" "/etc/caddy/sites-enabled/$(basename "$site_file")"
   fi
 else
-  if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
-    site_file=/etc/caddy/sites-available/hono.ohmstack.net.caddy
-    install -o root -g "$caddy_user" -m 0644 \
-      "$ROOT/config/caddy/sites/hono.ohmstack.net.caddy" "$site_file"
-    ln -sfn "../sites-available/$(basename "$site_file")" "/etc/caddy/sites-enabled/$(basename "$site_file")"
-  fi
-  if [[ -e /etc/caddy/sites-enabled/hono.ohmstack.net.caddy ]]; then setup_hono; fi
+  disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
+  site_file=/etc/caddy/sites-available/hono.ohmstack.net.caddy
+  [[ -e $site_file ]] || install -o root -g "$caddy_user" -m 0644 \
+    "$ROOT/config/caddy/sites/hono.ohmstack.net.caddy" "$site_file"
+  ln -sfn "../sites-available/$(basename "$site_file")" "/etc/caddy/sites-enabled/$(basename "$site_file")"
+  setup_hono
 fi
 
 step 'Build and install Caddy'
@@ -89,6 +114,7 @@ bash "$ROOT/scripts/caddy/build.sh"
 step 'Validate the Caddy configuration'
 /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile
 systemctl daemon-reload
+clear_caddy_ufw_rules
 if [[ $CADDY_MODE == public ]]; then
   ufw allow 80/tcp comment 'Caddy HTTP'
   ufw allow 443/tcp comment 'Caddy HTTPS'

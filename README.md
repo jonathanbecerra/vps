@@ -203,6 +203,12 @@ host and VPN settings only. If an older host has no Caddy role file,
 `make setup-host` asks once and defaults safely to private ingress. The
 Cloudflare token belongs in `/etc/caddy/caddy.env`.
 
+The bootstrap site follows the role: `public` enables the static example site
+under `/var/www/example.com`; `private` enables `hono.ohmstack.net`, creates
+the app under `/var/app/hono`, and builds/starts its Docker Compose project.
+Rerunning `make setup-host` reconciles the Caddy-managed UFW rules and keeps
+the selected bootstrap site enabled.
+
 `public` means the host is prepared to receive public traffic; individual
 hostnames still depend on their DNS records, Cloudflare settings, router
 forwarding, and Caddy site files. `private` still uses Cloudflare for DNS-01
