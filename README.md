@@ -279,6 +279,18 @@ GET /api/hello {"message":"Hello from Hono"}
 GET /healthz   {"ok":true}
 ```
 
+The example uses `pnpm@12.8.1`, matching the dotfiles setup. It is a Node.js
+API using Hono's Node adapter, so it does not need Vite. Hono's Vite plugins
+are for front-end/framework templates; add Vite when this project grows a
+browser-facing frontend. See the [Hono Node.js guide](https://hono.dev/docs/getting-started/nodejs).
+For local work:
+
+```sh
+cd /var/app/hono
+pnpm install
+pnpm run build
+```
+
 Static sites should import the reusable `conceal` snippet. It hides repository
 metadata, environment files, keys, logs, editor files, backups, and source
 maps. For Astro, Angular, React, or similar builds, point `root` at

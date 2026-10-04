@@ -1,19 +1,23 @@
-FROM node:24-alpine AS build
+FROM node:24-alpine AS base
+
+RUN corepack enable && corepack install --global pnpm@12.8.1
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+
+FROM base AS build
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN pnpm run build && pnpm prune --prod
 
-FROM node:24-alpine
+FROM base
 
 ENV NODE_ENV=production
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json /app/package.json
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/dist /app/dist
 USER node
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
