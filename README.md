@@ -212,13 +212,14 @@ For a repository that the host should clone, create a repository-scoped GitHub
 deploy key instead of giving the host a personal GitHub key:
 
 ```sh
-make deploy-key REPO=owner/repository SITE=example.com
+make deploy-key REPO=example
 ```
 
 Add the printed public key to that GitHub repository as a read-only deploy key.
 The command stores the private key as
-`~/.ssh/deploy-keys/<site>/id_ed25519` and adds a site-specific SSH alias.
-Clone with the printed `git@github-...` URL.
+`~/.ssh/deploy-keys/<repo>/id_ed25519` and adds a repository-specific SSH alias.
+The GitHub owner is read from the VPS repository's `origin`. Clone with the
+printed `git@github-...` URL.
 
 ## 7. Make changes safely
 
