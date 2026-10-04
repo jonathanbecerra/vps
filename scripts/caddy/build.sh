@@ -8,6 +8,7 @@ command -v docker >/dev/null || die 'Install Docker before building Caddy.'
 docker info >/dev/null || die 'Docker is not ready.'
 
 begin 'Build Caddy with Cloudflare DNS'
+note 'Docker build output follows; this may take several minutes on a Raspberry Pi.'
 temporary=$(mktemp -d)
 container=
 cleanup_build() {
@@ -16,7 +17,7 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
-progress 'Build the Caddy binary' docker build --pull --target builder \
+progress 'Build the Caddy binary' --interactive docker build --progress=plain --pull --target builder \
   --tag vps-caddy-builder:2.11.4 "$ROOT/stacks/caddy"
 container=$(docker create vps-caddy-builder:2.11.4)
 progress 'Copy the Caddy binary' docker cp "$container:/usr/bin/caddy" "$temporary/caddy"
