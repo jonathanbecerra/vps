@@ -37,6 +37,7 @@ SECURITY_UPDATES=yes
 begin 'Set up this Ubuntu box'
 ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
 ask ADMIN_USER 'Admin username' "$ADMIN_USER"
+if [[ ! -f $CADDY_CONFIG && $CADDY_MODE == public ]]; then CADDY_MODE=private; fi
 ask CADDY_MODE 'Caddy role? public, private, or none' "$CADDY_MODE"
 ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
@@ -84,6 +85,7 @@ printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
 printf '  make setup-host applies the selected Caddy role; make configure-services applies VPN choices.\n'
+printf '  Caddy role: /etc/caddy/caddy.conf; Cloudflare token: /etc/caddy/caddy.env.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
 
@@ -134,7 +136,7 @@ configure_host() {
   usermod -s "$(command -v zsh)" "$ADMIN_USER"
 
   step 'Set up /opt/vps and /data'
-  install -d -m 0755 /data /etc/vps-setup /var/lib/vps-setup
+  install -d -m 0755 /data /etc/caddy /etc/vps-setup /var/lib/vps-setup
   install -d -m 0700 /data/backups /var/backups/vps-setup
   [[ ! -L /opt/vps ]] || die '/opt/vps must be a directory, not a symlink.'
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 /opt/vps
@@ -143,10 +145,11 @@ configure_host() {
   fi
   chown -R "$ADMIN_USER:$admin_group" /opt/vps
   install -d -o "$ADMIN_USER" -g "$admin_group" -m 0700 /opt/vps/.local
-  for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT SECURITY_UPDATES; do
+  for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
     printf '%s=%s\n' "$key" "${!key}"
   done >/etc/vps-setup/host.conf
   chmod 0644 /etc/vps-setup/host.conf
+  write_caddy_config
 
   progress 'Install Docker and Compose' bash "$ROOT/scripts/os/install-docker.sh"
   bash "$ROOT/scripts/os/configure-security.sh"

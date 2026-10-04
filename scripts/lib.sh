@@ -3,6 +3,8 @@ set -Eeuo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 export ROOT
 WG_ENDPOINT=
+CADDY_MODE=none
+CADDY_CONFIG=/etc/caddy/caddy.conf
 C_RESET='' C_CYAN='' C_GREEN='' C_RED='' C_YELLOW=''
 if [[ -t 1 && -z ${NO_COLOR+x} && ${TERM:-dumb} != dumb ]]; then
   C_RESET=$'\033[0m'
@@ -189,6 +191,30 @@ compose() {
     -f "$ROOT/stacks/compose.lock.yaml" "$@"
 }
 
+load_caddy_config() {
+  local file=${1:-$CADDY_CONFIG} key value
+  [[ -f $file ]] || return 0
+  while IFS='=' read -r key value || [[ -n $key ]]; do
+    [[ -z $key || $key == \#* ]] && continue
+    case "$key" in
+      CADDY_MODE)
+        CADDY_MODE=$value
+        case $value in
+          # Older releases used these values for a service-backed Caddy.
+          docker | service) CADDY_MODE=private ;;
+        esac
+        ;;
+      *) die "Unknown Caddy config key: $key" ;;
+    esac
+  done <"$file"
+}
+
+write_caddy_config() {
+  install -d -m 0755 "$(dirname "$CADDY_CONFIG")"
+  printf 'CADDY_MODE=%s\n' "$CADDY_MODE" >"$CADDY_CONFIG"
+  chmod 0644 "$CADDY_CONFIG"
+}
+
 load_config() {
   local file=$1 key value
   [[ -f $file ]] || die "Config not found: $file"
@@ -199,7 +225,8 @@ load_config() {
         printf -v "$key" '%s' "$value"
         if [[ $key == CADDY_MODE ]]; then
           case $value in
-            docker | service) CADDY_MODE=public ;;
+            # Older releases used these values for a service-backed Caddy.
+            docker | service) CADDY_MODE=private ;;
           esac
         fi
         ;;
@@ -208,6 +235,7 @@ load_config() {
       *) die "Unknown config key: $key" ;;
     esac
   done <"$file"
+  load_caddy_config
 }
 
 validate_config() {

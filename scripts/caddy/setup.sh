@@ -10,6 +10,18 @@ load_config /etc/vps-setup/host.conf
 validate_config
 setup_lock
 
+if [[ ! -f $CADDY_CONFIG ]]; then
+  [[ $CADDY_MODE != public ]] || CADDY_MODE=private
+  ask CADDY_MODE 'Caddy role? public, private, or none' "$CADDY_MODE"
+  validate_config
+  write_caddy_config
+fi
+
+if [[ -f /etc/vps-setup/host.conf ]] && grep -Eq '^[[:space:]]*CADDY_MODE=' /etc/vps-setup/host.conf; then
+  backup /etc/vps-setup/host.conf
+  sed -Ei '/^[[:space:]]*CADDY_MODE=/d' /etc/vps-setup/host.conf
+fi
+
 if [[ $CADDY_MODE == none ]]; then
   note 'Caddy is disabled for this host.'
   exit 0

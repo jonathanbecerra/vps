@@ -97,7 +97,7 @@ if [[ $VPN == tailscale && ! -f $ROOT/.local/tailscale.env ]]; then
   printf 'VPN_HOSTNAME=%s\nTS_AUTHKEY=%s\n' "$SERVER_HOSTNAME" "$token" >"$ROOT/.local/tailscale.env"
   unset token
 fi
-for key in SERVER_HOSTNAME ADMIN_USER CADDY_MODE VPN WG_ENDPOINT SECURITY_UPDATES; do
+for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
   printf '%s=%s\n' "$key" "${!key}"
 done >/etc/vps-setup/host.conf
 chmod 0644 /etc/vps-setup/host.conf

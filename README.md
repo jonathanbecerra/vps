@@ -197,6 +197,12 @@ boot, and applies the role selected during first setup:
 | `private` | Installs Caddy and the Cloudflare DNS module, creates the Hono Docker example, and allows Caddy only on the host's private interface. | Internal names such as `scrypted.ohmstack.net` and `hono.ohmstack.net`. |
 | `none` | Does not install or start Caddy. | Application-only hosts such as a Pi running Scrypted. |
 
+New hosts default to `none`; public ingress is always an explicit choice. The
+role is stored in `/etc/caddy/caddy.conf`; `/etc/vps-setup/host.conf` stores
+host and VPN settings only. If an older host has no Caddy role file,
+`make setup-host` asks once and defaults safely to private ingress. The
+Cloudflare token belongs in `/etc/caddy/caddy.env`.
+
 `public` means the host is prepared to receive public traffic; individual
 hostnames still depend on their DNS records, Cloudflare settings, router
 forwarding, and Caddy site files. `private` still uses Cloudflare for DNS-01
