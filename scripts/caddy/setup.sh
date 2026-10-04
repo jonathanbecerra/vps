@@ -31,10 +31,10 @@ site_file=/etc/caddy/sites-available/example.com.caddy
 if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
   install -d -o "$ADMIN_USER" -g "$caddy_user" -m 0755 /var/www/example.com /var/www/example.com/errors
   install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
-    "$ROOT/config/caddy/www/index.html" /var/www/example.com/index.html
+    "$ROOT/config/caddy/www/example.com/index.html" /var/www/example.com/index.html
   for status in 404 500; do
     install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
-      "$ROOT/config/caddy/www/errors/$status.html" "/var/www/example.com/errors/$status.html"
+      "$ROOT/config/caddy/www/example.com/errors/$status.html" "/var/www/example.com/errors/$status.html"
   done
   [[ ! -e $site_file ]] || backup "$site_file"
   cat >"$site_file" <<'EOF'

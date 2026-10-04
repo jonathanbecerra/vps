@@ -167,6 +167,16 @@ from the server's port 80. It creates:
 /var/www/<domain>/
 ```
 
+The tracked starter files follow the same site-per-directory layout:
+
+```text
+config/caddy/www/<domain>/
+├── index.html
+└── errors/
+    ├── 404.html
+    └── 500.html
+```
+
 Static sites use Caddy's `file_server` with a `hide` block for repository
 metadata, environment files, keys, and logs. Each site also gets custom error
 pages under `/var/www/<domain>/errors/`. Docker applications should bind to
