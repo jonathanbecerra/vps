@@ -225,7 +225,7 @@ case "$command" in
     read_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "Automatic security updates=$SECURITY_UPDATES."
-    note 'make setup-host installs Caddy as a native service with the Cloudflare DNS module.'
+    note 'make setup-host synchronizes time, installs the host, and installs Caddy as a native service with the Cloudflare DNS module.'
     note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'

@@ -33,7 +33,7 @@ help:
 	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
 	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
-	  '  setup-host          Install host packages, Caddy, and show status' \
+	  '  setup-host          Synchronize time, install the host, Caddy, and show status' \
 	  '  sync-time           Synchronize the Ubuntu clock before package work' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
@@ -74,6 +74,7 @@ help:
 	  '  teardown-vm         Delete the selected VM and its disk'
 
 setup-host:
+	@$(MAKE) --no-print-directory sync-time
 	@$(MAKE) --no-print-directory install-packages
 	@bash scripts/root.sh scripts/caddy/setup.sh
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status

@@ -83,7 +83,6 @@ Inside that fresh session, run:
 ```sh
 cd /opt/vps
 make confirm-ssh
-make sync-time
 make setup-host
 make install-dotfiles
 ```
@@ -157,7 +156,6 @@ Inside that session, run:
 ```sh
 cd /opt/vps
 make confirm-ssh
-make sync-time
 make setup-host
 make install-dotfiles
 ```
@@ -171,7 +169,88 @@ rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./
 Replace `2222` if your VM uses another forwarded port, or replace the key path
 if your key has a different filename.
 
-## 4. Add the optional dotfiles
+## 4. Finish host setup
+
+After SSH is confirmed, run this inside `/opt/vps`:
+
+```sh
+make setup-host
+make install-dotfiles
+```
+
+`make setup-host` synchronizes the clock, installs the host packages and
+security controls, installs Caddy, and shows the final status. You do not need
+to run `make sync-time` separately.
+
+### Caddy
+
+Caddy is a native systemd service. `make setup-host` builds it with the
+Cloudflare DNS module, installs it under `/usr/local/bin/caddy`, enables it at
+boot, and creates the initial HTTP site. Site configs live in
+`/etc/caddy/sites-available/`, are enabled through `sites-enabled/`, and serve
+files from `/var/www/<domain>/`.
+
+The parent Caddyfile keeps Caddy's admin API on the local
+`/run/caddy/admin.sock` with mode `0600`; systemd uses it for safe reloads
+without exposing an admin port.
+
+The Cloudflare token is only needed for DNS-01 certificate validation. This
+lets Caddy prove domain ownership through a TXT record for wildcard domains or
+when HTTP validation is unsuitable. In Cloudflare, go to **My Profile → API
+Tokens → Create Token** and use **Edit zone DNS**, limited to the specific
+zone, with:
+
+```text
+Zone:Read
+DNS:Edit
+```
+
+Do not use a Global API Key. See the [Cloudflare token guide](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+and [Caddy's DNS challenge options](https://caddyserver.com/docs/caddyfile/options#acme_dns).
+
+On the host, store the token in `/etc/caddy/caddy.env`:
+
+```sh
+sudo install -o root -g caddy -m 0640 /dev/null /etc/caddy/caddy.env
+sudoedit /etc/caddy/caddy.env
+```
+
+Add:
+
+```text
+CLOUDFLARE_API_TOKEN=your-token
+```
+
+The systemd service already loads that file. Caddy uses the token only when the
+site references it:
+
+```caddyfile
+example.com {
+  import security
+  root * /var/www/example.com/dist
+
+  tls {
+    dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+  }
+
+  import conceal
+}
+```
+
+Reload Caddy after changing the token or site:
+
+```sh
+sudo systemctl reload caddy
+```
+
+Static sites should import the reusable `conceal` snippet. It hides repository
+metadata, environment files, keys, logs, editor files, backups, and source
+maps. For Astro, Angular, React, or similar builds, point `root` at
+`/var/www/<domain>/dist`; Caddy then serves only that directory, not its
+parent. Docker applications should bind to loopback and use a
+`reverse_proxy` block in the site config.
+
+## 5. Add the optional dotfiles
 
 On the host, run it from the submodule checkout:
 
@@ -186,51 +265,6 @@ root, `make install-dotfiles` calls the same entry point.
 It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
-
-## 5. Set up Caddy
-
-Caddy runs as a native systemd service. Docker does not run Caddy. The setup
-command builds Caddy with the Cloudflare DNS module, installs it under
-`/usr/local/bin/caddy`, enables it at boot, and creates the first site. It runs
-as part of `make setup-host`:
-
-```sh
-make setup-host
-```
-
-The first run creates an HTTP hello-world site at `example.com` and serves it
-from the server's port 80. It creates:
-
-```text
-/etc/caddy/Caddyfile
-/etc/caddy/sites-available/<domain>.caddy
-/etc/caddy/sites-enabled/<domain>.caddy -> ../sites-available/<domain>.caddy
-/var/www/<domain>/
-```
-
-The tracked starter files follow the same site-per-directory layout:
-
-```text
-config/caddy/www/<domain>/
-├── index.html
-└── errors/
-    ├── 404.html
-    └── 500.html
-```
-
-Static sites should import the reusable `conceal` snippet from the parent
-Caddyfile. It hides repository metadata, environment files, keys, logs,
-editor files, backups, and source maps. For Astro, Angular, React, or similar
-builds, point `root` at `/var/www/<domain>/dist`; Caddy then serves only that
-directory, not its parent. Each site also gets custom error pages under
-`/var/www/<domain>/errors/`. Docker applications should bind to loopback and
-use a `reverse_proxy` block in the Caddy site. Replace the example site in
-`/etc/caddy/sites-available/example.com.caddy` when you are ready to add a
-real domain.
-
-The custom binary includes the Cloudflare DNS module. Add the Cloudflare token
-to `/etc/caddy/caddy.env` only when a site needs DNS-01 certificates. Caddy
-listens on ports 80 and 443 and starts on boot.
 
 ## 6. Add services when you need them
 
