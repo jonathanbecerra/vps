@@ -1,5 +1,4 @@
 name: vps
 
 include:
-  - ./caddy/compose.yaml
   - ./tailscale/compose.yaml

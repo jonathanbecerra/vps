@@ -4,7 +4,3 @@ ARG CADDY_VERSION=2.11.4
 
 RUN CGO_ENABLED=0 xcaddy build v${CADDY_VERSION} \
     --with github.com/caddy-dns/cloudflare@v0.2.4
-
-FROM docker.io/library/caddy:2.11.4@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52
-COPY --from=builder /usr/bin/caddy /usr/bin/caddy
-RUN caddy list-modules | grep -Fx dns.providers.cloudflare

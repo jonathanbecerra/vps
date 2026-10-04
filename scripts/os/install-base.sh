@@ -37,19 +37,6 @@ SECURITY_UPDATES=yes
 begin 'Set up this Ubuntu box'
 ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
 ask ADMIN_USER 'Admin username' "$ADMIN_USER"
-caddy_default=no
-case "$CADDY_MODE" in
-  docker) caddy_default=yes ;;
-  none) ;;
-  *) die 'CADDY_MODE must be docker or none.' ;;
-esac
-caddy_choice=$caddy_default
-ask caddy_choice 'Set up Caddy in Docker? yes or no' "$caddy_default"
-case "$caddy_choice" in
-  yes) CADDY_MODE=docker ;;
-  no) CADDY_MODE=none ;;
-  *) die 'Choose yes or no for Caddy.' ;;
-esac
 ask VPN 'Add a VPN? tailscale, wireguard, or none' "$VPN"
 ask SECURITY_UPDATES 'Automatic security updates? yes or no' "$SECURITY_UPDATES"
 validate_config
@@ -85,13 +72,13 @@ fi
 printf '\n%sReview setup%s\n' "$C_CYAN" "$C_RESET"
 printf '  %-18s %s\n' 'Hostname' "$SERVER_HOSTNAME"
 printf '  %-18s %s\n' 'Admin' "$ADMIN_USER"
-if [[ $CADDY_MODE == docker ]]; then caddy_summary=Docker; else caddy_summary=Off; fi
+if [[ $CADDY_MODE == service ]]; then caddy_summary=Service; else caddy_summary=Off; fi
 printf '  %-18s %s\n' 'Caddy' "$caddy_summary"
 printf '  %-18s %s\n' 'VPN' "$VPN"
 printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
-printf '  Configure Caddy routes with make configure-caddy; apply VPN choices with make configure-services.\n'
+printf '  Configure Caddy later with make configure-caddy; apply VPN choices with make configure-services.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1
 
@@ -109,6 +96,11 @@ configure_host() {
   step 'Update Ubuntu and install base packages'
   upgrade_os
   install_packages "${PACKAGES[@]}"
+  if [[ ! -f /etc/vps-setup/host.conf ]]; then
+    step 'Enable temporary SSH password access'
+    set_sshd_password_auth yes
+    progress 'Reload SSH' systemctl reload "$(ssh_service)"
+  fi
   # Install system-wide so sudo and new SSH sessions can find it too.
   backup /etc/hosts
   set_hosts_entry /etc/hosts "$SERVER_HOSTNAME"

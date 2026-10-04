@@ -7,7 +7,7 @@ export DOTFILES_DIR
 .PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host sync-time update-system
 .PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images
+.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images create-deploy-key
 .PHONY: down lock-images recreate restart show-containers up
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
@@ -39,24 +39,25 @@ help:
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
 	  'Caddy:' \
-	  '  build-caddy         Build Caddy with the Cloudflare plugin' \
-	  '  configure-caddy     Configure Caddy and its site routes' \
+	  '  build-caddy         Build the native Caddy binary with Cloudflare DNS' \
+	  '  configure-caddy     Install Caddy as a service and configure a site' \
 	  '' \
 	  'VPN:' \
-	  '  configure-services  Apply saved Caddy and VPN settings in order' \
+	  '  configure-services  Apply the saved VPN settings' \
 	  '  configure-tailscale Configure only Tailscale' \
 	  '  configure-wireguard Configure only WireGuard' \
 	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
 	  '' \
 	  'Compose:' \
-	  '  apply-stack         Apply STACK=caddy or tailscale on this host' \
+	  '  apply-stack         Apply STACK=tailscale on this host' \
 	  '  down                Stop containers in the combined Compose project' \
 	  '  lock-images         Update the lock for images in all included Compose files' \
-	  '  pull-stack          Pull STACK=tailscale or rebuild Caddy' \
+	  '  pull-stack          Pull STACK=tailscale' \
 	  '  recreate            Rebuild and recreate configured services' \
 	  '  restart             Restart configured services' \
 	  '  show-containers     List containers in the combined Compose project' \
-	  '  show-logs           Follow logs for STACK=caddy or tailscale' \
+	  '  show-logs           Follow logs for STACK=tailscale' \
+	  '  create-deploy-key   Create a read-only GitHub deploy key for REPO=owner/name' \
 	  '  up                  Start configured services and build local images' \
 	  '  verify-images       Check the combined image lock' \
 	  '' \
@@ -122,7 +123,7 @@ sync-time:
 	@bash scripts/root.sh scripts/os/sync-time.sh
 
 build-caddy:
-	@bash scripts/compose/build-caddy.sh
+	@bash scripts/root.sh scripts/caddy/build.sh
 
 lock-images:
 	@bash scripts/compose/lock-images.sh lock
@@ -147,7 +148,7 @@ show-containers:
 	@bash scripts/compose/manage-compose.sh ps
 
 configure-caddy:
-	@bash scripts/root.sh scripts/compose/configure-services.sh configure --enable-caddy --caddy-only --reconfigure-caddy
+	@bash scripts/root.sh scripts/caddy/configure.sh
 
 configure-services:
 	@bash scripts/root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
@@ -169,6 +170,9 @@ pull-stack:
 
 show-logs:
 	@bash scripts/compose/configure-services.sh logs "$$STACK"
+
+create-deploy-key:
+	@REPO='$(REPO)' KEY_PREFIX='$(KEY_PREFIX)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/create-deploy-key.sh
 
 deploy-stack:
 	@bash scripts/deploy/deploy-stack.sh

@@ -12,9 +12,6 @@ ADMIN_USER='admin'
 CADDY_MODE='none'
 VPN='none'
 SECURITY_UPDATES='yes'
-CADDY_ONLY=no
-VPN_ONLY=no
-RECONFIGURE_CADDY=no
 if [[ -z ${HOST:-} && -r /etc/vps-setup/host.conf ]]; then load_config /etc/vps-setup/host.conf; fi
 key_file='<public-key-file>'
 if [[ $command == setup-vps ]]; then
@@ -82,11 +79,11 @@ preview_image_locks() {
   local operation=$1 lock="$ROOT/stacks/compose.lock.yaml"
   note "Use a temporary lock under $ROOT/.image-lock.XXXXXX and remove it when done."
   run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
-    --profile caddy --profile tailscale \
+    --profile tailscale \
     config --lock-image-digests --output '<temporary-directory>/compose.lock.yaml'
   if [[ $operation == lock ]]; then
     run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
-      -f '<temporary-directory>/compose.lock.yaml' --profile caddy --profile tailscale config --quiet
+      -f '<temporary-directory>/compose.lock.yaml' --profile tailscale config --quiet
     run chmod 0644 '<temporary-directory>/compose.lock.yaml'
     run mv '<temporary-directory>/compose.lock.yaml' "$lock"
   else
@@ -94,15 +91,17 @@ preview_image_locks() {
     run diff -u "$lock" '<temporary-directory>/compose.lock.yaml'
     note 'Stop if the saved lock is missing or differs.'
     run docker compose --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
-      -f "$lock" --profile caddy --profile tailscale config --quiet
+      -f "$lock" --profile tailscale config --quiet
   fi
   run rm -rf '<temporary-directory>'
 }
 
 preview_caddy_build() {
-  preview_image_locks verify
-  run docker compose --env-file "$ROOT/.env.example" --profile caddy \
-    -f "$ROOT/stacks/compose.yaml" -f "$ROOT/stacks/compose.lock.yaml" build --pull caddy
+  note 'Build the native Caddy binary with the Cloudflare DNS module through the pinned builder image.'
+  run docker build --pull --target builder --tag vps-caddy-builder:2.11.4 "$ROOT/stacks/caddy"
+  run docker create vps-caddy-builder:2.11.4
+  run docker cp '<builder-container>:/usr/bin/caddy' '<temporary-directory>/caddy'
+  run install -m 0755 '<temporary-directory>/caddy' /usr/local/bin/caddy
 }
 
 preview_legacy_compose() {
@@ -114,34 +113,21 @@ preview_legacy_compose() {
 }
 
 preview_stack() {
-  case "$stack" in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
+  case "$stack" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
   compose=(docker compose --env-file /opt/vps/.env.example
-    --env-file /opt/vps/.local/caddy.env --env-file /opt/vps/.local/tailscale.env
+    --env-file /opt/vps/.local/tailscale.env
     -f /opt/vps/stacks/compose.yaml -f /opt/vps/stacks/compose.lock.yaml --profile "$stack")
   case "$action" in
     apply)
       preview_legacy_compose "$stack"
       run "${compose[@]}" config --quiet
-      if [[ $stack == caddy ]]; then
-        preview_caddy_build
-        run "${compose[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
-      else
-        preview_image_locks verify
-      fi
-      if [[ $stack == caddy ]]; then
-        run "${compose[@]}" up -d --no-build --force-recreate --wait --wait-timeout 90 "$stack"
-      else
-        run "${compose[@]}" up -d --no-build --wait --wait-timeout 90 "$stack"
-      fi
+      preview_image_locks verify
+      run "${compose[@]}" up -d --no-build --wait --wait-timeout 90 "$stack"
       run "${compose[@]}" ps
       ;;
     pull)
-      if [[ $stack == caddy ]]; then
-        preview_caddy_build
-      else
-        preview_image_locks verify
-        run "${compose[@]}" pull "$stack"
-      fi
+      preview_image_locks verify
+      run "${compose[@]}" pull "$stack"
       ;;
     logs) run "${compose[@]}" logs --tail 100 --follow ;;
     vpn-login) run "${compose[@]}" exec tailscale tailscale up --accept-dns=false ;;
@@ -152,10 +138,9 @@ preview_compose() {
   local action=$1
   local -a profiles=()
   note "Use the saved service choices: Caddy=$CADDY_MODE, VPN=$VPN."
-  [[ $CADDY_MODE != docker ]] || profiles+=(--profile caddy)
   [[ $VPN != tailscale ]] || profiles+=(--profile tailscale)
   compose=(docker compose --env-file /opt/vps/.env.example
-    --env-file /opt/vps/.local/caddy.env --env-file /opt/vps/.local/tailscale.env
+    --env-file /opt/vps/.local/tailscale.env
     -f /opt/vps/stacks/compose.yaml -f /opt/vps/stacks/compose.lock.yaml)
   run "${compose[@]}" "${profiles[@]}" config --services
   case "$action" in
@@ -164,8 +149,7 @@ preview_compose() {
       run "${compose[@]}" "${profiles[@]}" up -d --build
       ;;
     down)
-      run "${compose[@]}" --profile caddy --profile tailscale down
-      preview_legacy_compose caddy
+      run "${compose[@]}" --profile tailscale down
       preview_legacy_compose tailscale
       ;;
     restart) run "${compose[@]}" "${profiles[@]}" restart ;;
@@ -175,7 +159,7 @@ preview_compose() {
       ;;
     ps)
       step 'Containers in the Compose project'
-      run "${compose[@]}" --profile caddy --profile tailscale ps -a
+      run "${compose[@]}" --profile tailscale ps -a
       ;;
   esac
 }
@@ -241,7 +225,7 @@ case "$command" in
     read_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "Automatic security updates=$SECURITY_UPDATES."
-    note 'Choose Caddy yes or no during setup; run make configure-caddy to add its routes.'
+    note 'Caddy is configured separately as a native service with make configure-caddy.'
     note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
@@ -292,6 +276,14 @@ case "$command" in
     run systemctl enable --now wg-quick@wg0
     ;;
   build-caddy) preview_caddy_build ;;
+  configure-caddy)
+    note 'Install the native Caddy binary, service unit, Cloudflare token, and site files under /etc/caddy.'
+    note 'Create /etc/caddy/sites-available and sites-enabled, /var/www/<domain>, custom errors, and UFW rules for 80/443.'
+    preview_caddy_build
+    run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
+    run install -d -m 0755 '/var/www/<domain>/errors'
+    run systemctl enable --now caddy
+    ;;
   lock-images) preview_image_locks lock ;;
   verify-images) preview_image_locks verify ;;
   compose-up) preview_compose up ;;
@@ -303,6 +295,11 @@ case "$command" in
   install-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/install.sh" "$@" ;;
   stow-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/stow.sh" "$@" ;;
   refresh-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/refresh.sh" "$@" ;;
+  create-deploy-key)
+    [[ ${REPO:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die 'Set REPO=owner/name.'
+    note 'Create one Ed25519 key under ~/.ssh/deploy-keys and a matching github-* SSH alias.'
+    note 'Add its public key to the named GitHub repository as read-only, then clone through that alias.'
+    ;;
   configure-ssh)
     case ${1:-harden} in
       harden)
@@ -328,76 +325,31 @@ case "$command" in
     if [[ $action == configure ]]; then
       while (($#)); do
         case $1 in
-          --enable-caddy) CADDY_MODE=docker ;;
-          --caddy-only) CADDY_ONLY=yes ;;
-          --vpn-only) VPN_ONLY=yes ;;
-          --reconfigure-caddy) RECONFIGURE_CADDY=yes ;;
+          --vpn-only) ;;
           --vpn=*) VPN=${1#*=} ;;
-          *) die 'Usage: configure-services.sh configure [--enable-caddy] [--vpn=NAME] [--caddy-only|--vpn-only] [--reconfigure-caddy]' ;;
+          *) die 'Usage: configure-services.sh configure [--vpn=NAME] [--vpn-only]' ;;
         esac
         shift
       done
       validate_config
-      if [[ $CADDY_ONLY == yes ]]; then
-        note 'Configure Caddy only. Leave saved VPN settings alone.'
-      elif [[ $VPN_ONLY == yes ]]; then
-        note "Configure $VPN only. Leave saved Caddy settings alone."
+      note "Configure the saved VPN setting: $VPN. Caddy is managed by make configure-caddy."
+      if [[ $VPN == tailscale ]]; then
+        note 'Check /dev/net/tun, save the auth key in /opt/vps/.local/tailscale.env, and start the pinned Tailscale image.'
+        run install -d -m 0700 /data/tailscale
+        stack=tailscale
+        preview_stack
+      elif [[ $VPN == wireguard ]]; then
+        WG_ENDPOINT=${WG_ENDPOINT:-203.0.113.10}
+        note 'Ask for the public endpoint, install WireGuard, create one client profile, and start wg-quick@wg0.'
+        apt_update
+        install_packages wireguard
+        copy_config wireguard/server.conf /etc/wireguard/wg0.conf
+        copy_config wireguard/client.conf /opt/vps/.local/wireguard-client.conf
+        run ufw allow 51820/udp comment WireGuard
+        run ufw allow in on wg0 from 10.66.0.0/24 comment WireGuard-clients
+        run systemctl enable --now wg-quick@wg0
       else
-        note "Configure saved services in order: Caddy=$CADDY_MODE, VPN=$VPN."
-      fi
-      note 'Check for conflicting services. Stop if a mode change would leave one running.'
-      if [[ $VPN_ONLY == no && $CADDY_MODE != none ]]; then
-        if [[ $RECONFIGURE_CADDY == yes ]]; then
-          note 'If the route file exists, ask before replacing it. Yes starts the route setup again; no keeps the saved routes.'
-        fi
-        note 'Choose one app or multiple apps on first setup. Single-app upstream is optional.'
-        note 'Multiple apps copy stacks/caddy/caddy-sites-example.caddy to /opt/vps/.local/caddy-sites.caddy for editing.'
-        note 'Run make configure-services after editing routes to apply them.'
-        note 'Ask for a Cloudflare token with Zone Read and DNS Edit access to the site zones.'
-        note 'Reject placeholder token input before starting Caddy.'
-        note 'Save the hidden token in /opt/vps/.local/caddy.env with mode 0600.'
-        note 'Set TZ=America/New_York in the Caddy env file if it has no TZ value.'
-        note 'Only open the firewall and start Caddy after routes are ready.'
-        note 'Stop an already running Caddy container if the replacement routes still need editing.'
-        note 'Create /data/www/blog and keep the blog files there; Caddy reads them from /srv/blog.'
-        run install -d -m 0700 /data/caddy /data/caddy/data /data/caddy/config
-        run install -d -o "$ADMIN_USER" -g '<admin-primary-group>' -m 0755 /data/www/blog
-        if [[ ! -e /data/www/blog/index.html ]]; then
-          note 'Copy the starter blog page if /data/www/blog/index.html does not exist.'
-          run install -o "$ADMIN_USER" -g '<admin-primary-group>' -m 0644 \
-            "$ROOT/stacks/caddy/www/blog/index.html" /data/www/blog/index.html
-        fi
-        for port in 80/tcp 443/tcp 443/udp; do run ufw allow "$port"; done
-      fi
-      if [[ $CADDY_ONLY == no && $VPN != none ]]; then
-        if [[ $VPN == tailscale ]]; then
-          note 'Check /dev/net/tun. Ask for a Tailscale key if no env file exists; Enter can use browser login.'
-          note 'Save /opt/vps/.local/tailscale.env with mode 0600.'
-          run install -d -m 0700 /data/tailscale
-        else
-          WG_ENDPOINT=${WG_ENDPOINT:-203.0.113.10}
-          note 'Ask for the public IPv4 address or DNS name clients can reach.'
-          note 'Install wireguard, generate one client profile, open UDP 51820, and start wg-quick@wg0.'
-          note 'Save /opt/vps/.local/wireguard-client.conf with mode 0600.'
-          apt_update
-          install_packages wireguard
-          copy_config wireguard/server.conf /etc/wireguard/wg0.conf
-          copy_config wireguard/client.conf /opt/vps/.local/wireguard-client.conf
-          run ufw allow 51820/udp comment WireGuard
-          run ufw allow in on wg0 from 10.66.0.0/24 comment WireGuard-clients
-          run systemctl enable --now wg-quick@wg0
-          note 'Preview uses 203.0.113.10; enter the real endpoint when prompted.'
-        fi
-      fi
-      note 'Save choices in /etc/vps-setup/host.conf.'
-      action=apply
-      if [[ $VPN_ONLY == no && $CADDY_MODE == docker ]]; then
-        stack=caddy
-        preview_stack
-      fi
-      if [[ $CADDY_ONLY == no && $VPN == tailscale ]]; then
-        stack=$VPN
-        preview_stack
+        note 'No VPN selected.'
       fi
     elif [[ $action == vpn-login && $VPN == none ]]; then
       note 'No VPN selected. Configure Tailscale or WireGuard first.'
@@ -412,7 +364,7 @@ case "$command" in
   deploy-stack | sync-repo | apply-stack)
     if [[ $command == deploy-stack ]]; then
       [[ ${HOST:-} =~ ^([a-z_][a-z0-9_-]*@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die 'Set HOST to your SSH alias or user@hostname.'
-      case "${STACK:-}" in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
+      case "${STACK:-}" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
       note "Deploy $STACK to $HOST. DRY_RUN=1 skips checks that need the host."
       make check-repo
       make preview-deploy
@@ -423,7 +375,7 @@ case "$command" in
     if [[ $command == apply-stack ]]; then
       action=apply
       stack=${STACK:-}
-      case "$stack" in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
+      case "$stack" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
       if [[ -z ${HOST:-} ]]; then
         preview_stack
         exit 0

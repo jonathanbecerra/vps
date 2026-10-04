@@ -27,23 +27,28 @@ Linux machine.
 
 ### Temporary password bootstrap
 
-If a fresh Ubuntu image has no authorized key, log in on the local console and create this temporary file:
+If a fresh Ubuntu image has no authorized key and password SSH is disabled, log
+in on the local console and set `PasswordAuthentication yes` in
+`/etc/ssh/sshd_config` and the existing cloud-init drop-in, usually
+`/etc/ssh/sshd_config.d/50-cloud-init.conf`. A console-safe update is:
 
 ```sh
-sudo vim /etc/ssh/sshd_config.d/00-bootstrap-password.conf
+sudo sh -c '
+for file in /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*cloud-init*.conf; do
+  [ -f "$file" ] || continue
+  if grep -Eq "^[[:space:]]*PasswordAuthentication[[:space:]]+" "$file"; then
+    sed -Ei "s/^[[:space:]]*PasswordAuthentication[[:space:]].*$/PasswordAuthentication yes/" "$file"
+  else
+    printf "\\nPasswordAuthentication yes\\n" >>"$file"
+  fi
+done
+sshd -t && systemctl restart ssh
+'
 ```
 
-Set its contents to:
-
-```text
-PasswordAuthentication yes
-```
-
-Reload SSH:
-
-```sh
-sudo sshd -t && sudo systemctl restart ssh
-```
+The setup script uses those same files on first boot. It does not create a
+second password override. `make configure-ssh` changes them back to `no`,
+disables root login, and requires public keys for the admin user.
 
 Copy the Mac key over port 22. Port 2222 is only for the local VM flow below:
 
@@ -55,7 +60,8 @@ cat ~/.ssh/gh_ed25519.pub | ssh -p 22 \
   'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
 ```
 
-`make configure-ssh` removes this file after key-only SSH passes. If the handoff rolls back, it restores the file.
+`make configure-ssh` changes the settings back to `no` after key-only SSH
+passes. If the handoff rolls back, it restores the saved SSH files.
 
 Copy the repository to the new host, then run setup as root. The repository is
 moved to `/opt/vps` when setup finishes. Replace `HOST` with the host or SSH
@@ -140,7 +146,35 @@ It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
 
-## 5. Add services when you need them
+## 5. Configure Caddy
+
+Caddy runs as a native systemd service. Docker does not run Caddy. The setup
+command builds Caddy with the Cloudflare DNS module, installs it under
+`/usr/local/bin/caddy`, enables it at boot, and creates the first site:
+
+```sh
+make configure-caddy
+```
+
+The command asks for a hostname and whether it serves static files or proxies
+to a Docker application. It creates:
+
+```text
+/etc/caddy/Caddyfile
+/etc/caddy/sites-available/<domain>.caddy
+/etc/caddy/sites-enabled/<domain>.caddy -> ../sites-available/<domain>.caddy
+/var/www/<domain>/
+```
+
+Static sites use Caddy's `file_server` with a `hide` block for repository
+metadata, environment files, keys, and logs. Each site also gets custom error
+pages under `/var/www/<domain>/errors/`. Docker applications should bind to
+loopback and use the proxy option in the Caddy site.
+
+The Cloudflare token is stored in `/etc/caddy/caddy.env` with mode `0640` and
+is never committed. Caddy listens on ports 80 and 443 and starts on boot.
+
+## 6. Add services when you need them
 
 The box is secure and useful before any application is deployed. Add a service
 under `stacks/<name>/`, include its Compose file in `stacks/compose.yaml`,
@@ -157,18 +191,21 @@ Keep app ports behind Caddy and bind any required host port to `127.0.0.1`.
 forwarding is denied by UFW, and UniFi remains responsible for traffic between
 the network zones.
 
-Caddy is optional and is configured manually after you know the routes:
+Point each hostname at the VPS. Keep application ports bound to loopback so
+only Caddy exposes them publicly.
+
+For a repository that the host should clone, create a repository-scoped GitHub
+deploy key instead of giving the host a personal GitHub key:
 
 ```sh
-make configure-caddy
-# edit /opt/vps/.local/caddy-sites.caddy
-make configure-services
+make create-deploy-key REPO=owner/site
 ```
 
-Point each hostname at the VPS and keep Cloudflare credentials in the local
-`.local` files; they are never committed.
+Add the printed public key to that GitHub repository as a read-only deploy key.
+The command names the private key `jb_<owner>-<repo>_ed25519` and adds a
+repository-specific SSH alias. Clone with the printed `git@github-...` URL.
 
-## 6. Make changes safely
+## 7. Make changes safely
 
 Run checks before copying changes to a host:
 

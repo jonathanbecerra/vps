@@ -169,7 +169,7 @@ find_compose() {
 remove_legacy_compose() {
   local stack=$1 env_file legacy_project="vps-$1"
   local -a env_args=(--env-file "$ROOT/.env.example")
-  case "$stack" in caddy | tailscale) ;; *) die 'Choose Caddy or Tailscale.' ;; esac
+  case "$stack" in tailscale) ;; *) die 'Choose Tailscale.' ;; esac
   [[ -n $(docker ps -aq --filter "label=com.docker.compose.project=$legacy_project") ]] || return 0
   find_compose
   env_file="$ROOT/.local/$stack.env"
@@ -183,9 +183,8 @@ compose() {
   local env_file
   local -a env_args=(--env-file "$ROOT/.env.example")
   find_compose
-  for env_file in "$ROOT/.local/caddy.env" "$ROOT/.local/tailscale.env"; do
-    [[ ! -f $env_file ]] || env_args+=(--env-file "$env_file")
-  done
+  env_file="$ROOT/.local/tailscale.env"
+  [[ ! -f $env_file ]] || env_args+=(--env-file "$env_file")
   "${COMPOSE[@]}" "${env_args[@]}" -f "$ROOT/stacks/compose.yaml" \
     -f "$ROOT/stacks/compose.lock.yaml" "$@"
 }
@@ -198,6 +197,7 @@ load_config() {
     case "$key" in
       SERVER_HOSTNAME | ADMIN_USER | CADDY_MODE | VPN | WG_ENDPOINT | SECURITY_UPDATES)
         printf -v "$key" '%s' "$value"
+        [[ $key != CADDY_MODE || $value != docker ]] || CADDY_MODE=service
         ;;
       INSTALL_FONT) ;; # Legacy host configs carried this dotfiles setting.
       SERVICES_CONFIGURED) ;;
@@ -209,13 +209,33 @@ load_config() {
 validate_config() {
   [[ ${SERVER_HOSTNAME:-} =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die 'Use a short hostname, lowercase letters, numbers, and hyphens.'
   [[ ${ADMIN_USER:-} =~ ^[a-z_][a-z0-9_-]{0,30}$ && $ADMIN_USER != root ]] || die 'Pick a regular Linux username, not root.'
-  case "${CADDY_MODE:-}" in docker | none) ;; *) die 'CADDY_MODE must be docker or none.' ;; esac
+  case "${CADDY_MODE:-}" in service | none) ;; *) die 'CADDY_MODE must be service or none.' ;; esac
   case "${VPN:-}" in tailscale | wireguard | none) ;; *) die 'VPN must be tailscale, wireguard, or none.' ;; esac
   if [[ $VPN == wireguard && -n $WG_ENDPOINT ]]; then
     [[ $WG_ENDPOINT =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ && $WG_ENDPOINT != *..* ]] ||
       die 'Set WG_ENDPOINT to a public IPv4 address or DNS name.'
   fi
   case "${SECURITY_UPDATES:-}" in yes | no) ;; *) die 'Use yes or no for SECURITY_UPDATES.' ;; esac
+}
+
+sshd_password_files() {
+  printf '%s\n' /etc/ssh/sshd_config
+  find /etc/ssh/sshd_config.d -maxdepth 1 -type f -name '*cloud-init*.conf' -print 2>/dev/null || true
+}
+
+set_sshd_password_auth() {
+  local value=$1 file
+  [[ $value == yes || $value == no ]] || die 'SSH password authentication must be yes or no.'
+  while IFS= read -r file; do
+    [[ -f $file ]] || continue
+    backup "$file"
+    if grep -Eq '^[[:space:]]*PasswordAuthentication[[:space:]]+' "$file"; then
+      sed -Ei "s/^[[:space:]]*PasswordAuthentication[[:space:]].*$/PasswordAuthentication $value/" "$file"
+    else
+      printf '\nPasswordAuthentication %s\n' "$value" >>"$file"
+    fi
+  done < <(sshd_password_files)
+  /usr/sbin/sshd -t
 }
 
 read_packages() {

@@ -11,11 +11,10 @@ validate_config
 begin 'Docker Compose'
 
 profiles=()
-[[ $CADDY_MODE != docker ]] || profiles+=(--profile caddy)
 [[ $VPN != tailscale ]] || profiles+=(--profile tailscale)
 services=$(compose "${profiles[@]}" config --services)
 if [[ $action != down && $action != ps && -z $services ]]; then
-  die 'No Docker services are enabled. Configure Caddy, Tailscale, or add a Compose service first.'
+  die 'No Docker services are enabled. Configure Tailscale or add an application stack first.'
 fi
 
 case "$action" in
@@ -28,13 +27,12 @@ case "$action" in
     fi
     ;;
   down)
-    progress 'Stop the Compose project' compose --profile caddy --profile tailscale down
-    remove_legacy_compose caddy
+    progress 'Stop the Compose project' compose --profile tailscale down
     remove_legacy_compose tailscale
     ;;
   restart) progress 'Restart enabled services' compose "${profiles[@]}" restart ;;
   ps)
     step 'Containers in the Compose project'
-    compose --profile caddy --profile tailscale ps -a
+    compose --profile tailscale ps -a
     ;;
 esac

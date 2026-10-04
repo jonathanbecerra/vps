@@ -15,7 +15,9 @@ timedatectl show -p NTPSynchronized
 note 'Failed systemd units'
 systemctl --failed --no-pager
 [[ -z $(systemctl --failed --no-legend --plain) ]] || failed=1
-for service in "$(ssh_service)" docker fail2ban ufw; do
+services=("$(ssh_service)" docker fail2ban ufw)
+[[ $CADDY_MODE != service ]] || services+=(caddy)
+for service in "${services[@]}"; do
   if ! systemctl is-active "$service"; then failed=1; fi
 done
 note 'Firewall and SSH bans'
@@ -54,13 +56,14 @@ if ((${#container_ids[@]})); then
     failed=1
   fi
 fi
-if [[ $CADDY_MODE == docker ]]; then
-  if [[ ! -f $ROOT/.local/caddy.env ]]; then
+if [[ $CADDY_MODE == service ]]; then
+  if [[ ! -x /usr/local/bin/caddy || ! -f /etc/caddy/Caddyfile ]]; then
     note 'Caddy is selected but not configured.'
     printf '\tRun:\n\t\tmake configure-caddy\n'
+    failed=1
   else
-    caddy_container=$(compose --profile caddy ps --status running --quiet caddy)
-    [[ -n $caddy_container ]] || failed=1
+    /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile || failed=1
+    systemctl is-enabled --quiet caddy || failed=1
   fi
 fi
 if [[ $VPN == tailscale ]]; then

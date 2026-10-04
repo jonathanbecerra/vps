@@ -3,7 +3,7 @@
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested deploy-stack "$@"
 [[ -n ${HOST:-} ]] || die 'Set HOST to your SSH alias.'
-case "${STACK:-}" in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
+case "${STACK:-}" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
 cd "$ROOT"
 begin "Deploy $STACK to $HOST"
 export VPS_NO_CLEAR=1

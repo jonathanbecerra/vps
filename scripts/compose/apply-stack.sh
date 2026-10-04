@@ -2,7 +2,7 @@
 # shellcheck source=scripts/lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested apply-stack "$@"
-case ${STACK:-} in caddy | tailscale) ;; *) die 'Set STACK=caddy or tailscale.' ;; esac
+case ${STACK:-} in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
 if [[ -z ${HOST:-} ]]; then exec bash "$ROOT/scripts/compose/configure-services.sh" apply "$STACK"; fi
 [[ $HOST =~ ^([a-z_][a-z0-9_-]*@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die 'Set HOST to an SSH alias or user@hostname.'
 begin "Apply $STACK on $HOST"

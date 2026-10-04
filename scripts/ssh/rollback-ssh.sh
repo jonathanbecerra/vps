@@ -27,6 +27,13 @@ if [[ -f $pending/vps-setup.conf ]]; then
 else
   rm -f /etc/ssh/vps-setup.conf
 fi
+if [[ -f $pending/sshd-password-files ]]; then
+  while IFS= read -r file; do
+    relative=${file#/etc/ssh/}
+    [[ -f $pending/sshd-files/$relative ]] || continue
+    install -D -m 0644 "$pending/sshd-files/$relative" "$file"
+  done <"$pending/sshd-password-files"
+fi
 if [[ -f $pending/bootstrap-password.conf ]]; then
   cp -a "$pending/bootstrap-password.conf" "$bootstrap_password_config"
 fi

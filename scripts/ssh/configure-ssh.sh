@@ -38,6 +38,14 @@ case "$action" in
     cp -a /etc/ssh/sshd_config "$pending/sshd_config"
     [[ ! -e /etc/ssh/vps-setup.conf ]] || cp -a /etc/ssh/vps-setup.conf "$pending/vps-setup.conf"
     [[ ! -f $bootstrap_password_config ]] || cp -a "$bootstrap_password_config" "$pending/bootstrap-password.conf"
+    install -d -m 0700 "$pending/sshd-files"
+    : >"$pending/sshd-password-files"
+    while IFS= read -r file; do
+      [[ -f $file ]] || continue
+      relative=${file#/etc/ssh/}
+      printf '%s\n' "$file" >>"$pending/sshd-password-files"
+      install -D -m 0644 "$file" "$pending/sshd-files/$relative"
+    done < <(sshd_password_files)
     ssh_service >"$pending/service"
     printf '%s\n' "$SSH_CONNECTION" >"$pending/connection"
     install -m 0755 "$ROOT/scripts/ssh/rollback-ssh.sh" /usr/local/sbin/vps-rollback-ssh
@@ -51,8 +59,9 @@ case "$action" in
     # The first SSH setting wins, so this goes before cloud-init's config.
     sed -i '\|^Include /etc/ssh/vps-setup.conf$|d' /etc/ssh/sshd_config
     sed -i '1i Include /etc/ssh/vps-setup.conf' /etc/ssh/sshd_config
-    step 'Remove temporary password SSH override'
-    rm -f "$bootstrap_password_config"
+    step 'Disable password SSH access in the cloud-init settings'
+    set_sshd_password_auth no
+    rm -f /etc/ssh/sshd_config.d/00-bootstrap-password.conf
     step 'Check the effective SSH settings'
     check_effective
     progress 'Reload SSH' systemctl reload "$(cat "$pending/service")"

@@ -1,0 +1,14 @@
+{
+	admin unix//run/caddy/admin.sock|0600
+}
+
+(security) {
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+import /etc/caddy/sites-enabled/*.caddy

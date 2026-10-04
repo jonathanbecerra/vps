@@ -13,13 +13,13 @@ locked="$temporary/compose.lock.yaml"
 
 step 'Resolve image digests from the included Compose files'
 progress 'Resolve image digests' "${COMPOSE[@]}" --env-file "$ROOT/.env.example" \
-  -f "$ROOT/stacks/compose.yaml" --profile caddy --profile tailscale \
+  -f "$ROOT/stacks/compose.yaml" --profile tailscale \
   config --lock-image-digests --output "$locked"
 
 lock="$ROOT/stacks/compose.lock.yaml"
 if [[ $action == lock ]]; then
   "${COMPOSE[@]}" --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
-    -f "$locked" --profile caddy --profile tailscale config --quiet
+    -f "$locked" --profile tailscale config --quiet
   chmod 0644 "$locked"
   mv "$locked" "$lock"
   note 'Updated stacks/compose.lock.yaml.'
@@ -31,5 +31,5 @@ else
   fi
   note 'Image lock matches.'
   "${COMPOSE[@]}" --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \
-    -f "$lock" --profile caddy --profile tailscale config --quiet
+    -f "$lock" --profile tailscale config --quiet
 fi
