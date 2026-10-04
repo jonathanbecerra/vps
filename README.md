@@ -2,7 +2,8 @@
 
 This repository turns a fresh Ubuntu machine into a usable Docker host. It
 sets up the admin account, SSH handoff, updates, Docker and Compose, UFW,
-fail2ban, and automatic security updates. App stacks are added later.
+fail2ban, automatic security updates, and the selected Caddy role. App stacks
+are added later.
 
 ## 1. Get the code
 
@@ -56,7 +57,9 @@ sudo ./setup-vps.sh
 ```
 
 The setup script moves the project to `/opt/vps`, creates the selected admin
-account, installs the base security controls, and prints the handoff steps.
+account, asks whether this host is a public Caddy ingress, private Caddy
+ingress, or has no Caddy, installs the base security controls, and prints the
+handoff steps.
 Replace `admin` below with the admin username selected during setup. Keep that
 session open. Open a fresh key session as the selected admin and harden SSH:
 
@@ -179,26 +182,47 @@ make install-dotfiles
 ```
 
 `make setup-host` synchronizes the clock, installs the host packages and
-security controls, installs Caddy, and shows the final status. You do not need
-to run `make sync-time` separately.
+security controls, applies the selected Caddy role, and shows the final status.
+You do not need to run `make sync-time` separately.
 
 ### Caddy
 
 Caddy is a native systemd service. `make setup-host` builds it with the
 Cloudflare DNS module, installs it under `/usr/local/bin/caddy`, enables it at
-boot, and creates the initial HTTP site. Site configs live in
-`/etc/caddy/sites-available/`, are enabled through `sites-enabled/`, and serve
-files from `/var/www/<domain>/`.
+boot, and applies the role selected during first setup:
+
+| Role | Result | Use it for |
+| --- | --- | --- |
+| `public` | Installs Caddy, creates the initial static site, and allows 80/tcp, 443/tcp, and 443/udp in UFW. | A DMZ or public-ingress host serving sites or direct public services. |
+| `private` | Installs Caddy and the Cloudflare DNS module, creates the Hono Docker example, and allows Caddy only on the host's private interface. | Internal names such as `scrypted.ohmstack.net` and `hono.ohmstack.net`. |
+| `none` | Does not install or start Caddy. | Application-only hosts such as a Pi running Scrypted. |
+
+`public` means the host is prepared to receive public traffic; individual
+hostnames still depend on their DNS records, Cloudflare settings, router
+forwarding, and Caddy site files. `private` still uses Cloudflare for DNS-01
+certificate validation, but it must not have a WAN port-forward. UniFi remains
+responsible for the VLAN boundary, while UFW limits the host-side listener.
+
+Site configs live in `/etc/caddy/sites-available/`, are enabled through
+`sites-enabled/`, and use these runtime paths:
+
+```text
+/var/www/<domain>/       Static file-server sites
+/var/app/<project>/     Docker applications and their Compose files
+```
+
+The provisioning repository remains in `/opt/vps`. It owns the templates and
+examples; runtime application data belongs under `/var/app` or `/var/www`.
 
 The parent Caddyfile keeps Caddy's admin API on the local
 `/run/caddy/admin.sock` with mode `0600`; systemd uses it for safe reloads
 without exposing an admin port.
 
-The Cloudflare token is only needed for DNS-01 certificate validation. This
-lets Caddy prove domain ownership through a TXT record for wildcard domains or
-when HTTP validation is unsuitable. In Cloudflare, go to **My Profile → API
-Tokens → Create Token** and use **Edit zone DNS**, limited to the specific
-zone, with:
+The Cloudflare token is used by both Caddy roles when a site uses DNS-01
+certificate validation. This lets Caddy prove domain ownership through a TXT
+record for private names, wildcard domains, or when HTTP validation is
+unsuitable. In Cloudflare, go to **My Profile → API Tokens → Create Token** and
+use **Edit zone DNS**, limited to the specific zone, with:
 
 ```text
 Zone:Read
@@ -222,20 +246,22 @@ CLOUDFLARE_API_TOKEN=your-token
 ```
 
 The systemd service already loads that file. Caddy uses the token only when the
-site references it:
+site references it. The private Hono example already does this:
 
 ```caddyfile
-example.com {
-  import security
-  root * /var/www/example.com/dist
-
+hono.ohmstack.net {
   tls {
     dns cloudflare {env.CLOUDFLARE_API_TOKEN}
   }
 
-  import conceal
+  reverse_proxy 127.0.0.1:3000
 }
 ```
+
+For private names, create an internal DNS record such as
+`hono.ohmstack.net → <private-Caddy-IP>`. Do not publish a public `A` or `AAAA`
+record for a service that should remain internal. Caddy can still obtain the
+publicly trusted certificate through Cloudflare DNS-01.
 
 Reload Caddy after changing the token or site:
 
@@ -243,12 +269,22 @@ Reload Caddy after changing the token or site:
 sudo systemctl reload caddy
 ```
 
+The private role creates a small Hono TypeScript API at
+`/var/app/hono`, builds it with Docker, and binds it only to
+`127.0.0.1:3000`. It serves:
+
+```text
+GET /          {"message":"Hello from Hono","service":"hono"}
+GET /api/hello {"message":"Hello from Hono"}
+GET /healthz   {"ok":true}
+```
+
 Static sites should import the reusable `conceal` snippet. It hides repository
 metadata, environment files, keys, logs, editor files, backups, and source
 maps. For Astro, Angular, React, or similar builds, point `root` at
 `/var/www/<domain>/dist`; Caddy then serves only that directory, not its
-parent. Docker applications should bind to loopback and use a
-`reverse_proxy` block in the site config.
+parent. Docker applications should live under `/var/app/<project>`, bind to
+loopback, and use a `reverse_proxy` block in the site config.
 
 ## 5. Add the optional dotfiles
 
