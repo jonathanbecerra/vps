@@ -4,18 +4,27 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 preview_if_requested deploy-key "$@"
 [[ $(uname -s) == Linux ]] || die 'Run this on the Linux host.'
 [[ $ROOT == /opt/vps ]] || die 'Run this command from /opt/vps.'
-[[ ${REPO:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die 'Set REPO=owner/name.'
+[[ ${SITE:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die 'Set SITE=example.com.'
 
-owner=${REPO%%/*}
-repository=${REPO#*/}
-slug=$(printf '%s-%s' "$owner" "$repository" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+if [[ -n ${GITHUB_OWNER:-} ]]; then
+  github_owner=$GITHUB_OWNER
+else
+  remote_url=$(git remote get-url origin 2>/dev/null || true)
+  [[ $remote_url =~ github\.com[:/]([A-Za-z0-9_.-]+)/[A-Za-z0-9_.-]+(\.git)?$ ]] ||
+    die 'Could not determine the GitHub owner from origin; set GITHUB_OWNER.'
+  github_owner=${BASH_REMATCH[1]}
+fi
+[[ $github_owner =~ ^[A-Za-z0-9_.-]+$ ]] || die 'GITHUB_OWNER contains invalid characters.'
+
+repo="$github_owner/$SITE"
+slug=$(printf '%s' "$SITE" | tr '[:upper:]' '[:lower:]')
 key_dir=${DEPLOY_KEY_DIR:-$HOME/.ssh/deploy-keys/$slug}
 key_file="$key_dir/site_ed25519"
 host_alias="github-$slug"
 
 install -d -m 0700 "$HOME/.ssh" "$key_dir"
 if [[ -e $key_file || -e $key_file.pub ]]; then die "Deploy key already exists: $key_file"; fi
-ssh-keygen -q -t ed25519 -C "$REPO read-only deploy key" -f "$key_file" -N ''
+ssh-keygen -q -t ed25519 -C "$repo read-only deploy key" -f "$key_file" -N ''
 chmod 0600 "$key_file"
 chmod 0644 "$key_file.pub"
 
@@ -33,7 +42,7 @@ Host $host_alias
 EOF
 fi
 
-printf '\nAdd this public key to GitHub as a read-only deploy key for %s:\n' "$REPO"
+printf '\nAdd this public key to GitHub as a read-only deploy key for %s:\n' "$repo"
 cat "$key_file.pub"
 printf '\nClone through the repository-specific SSH alias:\n'
-printf 'git clone git@%s:%s.git\n' "$host_alias" "$REPO"
+printf 'git clone git@%s:%s.git\n' "$host_alias" "$repo"

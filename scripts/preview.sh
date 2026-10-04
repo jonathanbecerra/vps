@@ -296,9 +296,9 @@ case "$command" in
   stow-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/stow.sh" "$@" ;;
   refresh-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/refresh.sh" "$@" ;;
   deploy-key)
-    [[ ${REPO:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die 'Set REPO=owner/name.'
-    note 'Create one Ed25519 key at ~/.ssh/deploy-keys/<repo>/site_ed25519 and a matching github-* SSH alias.'
-    note 'Add its public key to the named GitHub repository as read-only, then clone through that alias.'
+    [[ ${SITE:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die 'Set SITE=example.com.'
+    note 'Create one Ed25519 key at ~/.ssh/deploy-keys/<site>/site_ed25519 and a matching github-* SSH alias.'
+    note 'Add its public key to the GitHub repository named after SITE as read-only, then clone through that alias.'
     ;;
   configure-ssh)
     case ${1:-harden} in
