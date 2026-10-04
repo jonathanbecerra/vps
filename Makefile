@@ -56,7 +56,7 @@ help:
 	  '  restart             Restart configured services' \
 	  '  show-containers     List containers in the combined Compose project' \
 	  '  show-logs           Follow logs for STACK=tailscale' \
-	  '  deploy-key          Create a read-only GitHub deploy key for SITE=example.com' \
+	  '  deploy-key          Create a deploy key for REPO=owner/name SITE=example.com' \
 	  '  up                  Start configured services and build local images' \
 	  '  verify-images       Check the combined image lock' \
 	  '' \
@@ -169,7 +169,7 @@ show-logs:
 	@bash scripts/compose/configure-services.sh logs "$$STACK"
 
 deploy-key:
-	@SITE='$(SITE)' GITHUB_OWNER='$(GITHUB_OWNER)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/deploy-key.sh
+	@REPO='$(REPO)' SITE='$(SITE)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/deploy-key.sh
 
 deploy-stack:
 	@bash scripts/deploy/deploy-stack.sh
