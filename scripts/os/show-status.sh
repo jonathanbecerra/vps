@@ -59,7 +59,7 @@ fi
 if [[ $CADDY_MODE == service ]]; then
   if [[ ! -x /usr/local/bin/caddy || ! -f /etc/caddy/Caddyfile ]]; then
     note 'Caddy is selected but not configured.'
-    printf '\tRun:\n\t\tmake configure-caddy\n'
+    printf '\tRun:\n\t\tmake setup-host\n'
     failed=1
   else
     /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile || failed=1

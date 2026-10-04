@@ -7,7 +7,7 @@ export DOTFILES_DIR
 .PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host sync-time update-system
 .PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images create-deploy-key
+.PHONY: apply-stack build-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images deploy-key
 .PHONY: down lock-images recreate restart show-containers up
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
@@ -33,14 +33,13 @@ help:
 	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
 	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
-	  '  setup-host          Install host packages and show status' \
+	  '  setup-host          Install host packages, Caddy, and show status' \
 	  '  sync-time           Synchronize the Ubuntu clock before package work' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
 	  'Caddy:' \
-	  '  build-caddy         Build the native Caddy binary with Cloudflare DNS' \
-	  '  configure-caddy     Install Caddy as a service and configure a site' \
+	  '  build-caddy         Rebuild the native Caddy binary with Cloudflare DNS' \
 	  '' \
 	  'VPN:' \
 	  '  configure-services  Apply the saved VPN settings' \
@@ -57,7 +56,7 @@ help:
 	  '  restart             Restart configured services' \
 	  '  show-containers     List containers in the combined Compose project' \
 	  '  show-logs           Follow logs for STACK=tailscale' \
-	  '  create-deploy-key   Create a read-only GitHub deploy key for REPO=owner/name' \
+	  '  deploy-key          Create a read-only GitHub deploy key for REPO=owner/name' \
 	  '  up                  Start configured services and build local images' \
 	  '  verify-images       Check the combined image lock' \
 	  '' \
@@ -76,6 +75,7 @@ help:
 
 setup-host:
 	@$(MAKE) --no-print-directory install-packages
+	@bash scripts/root.sh scripts/caddy/setup.sh
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status
 
 install-dotfiles:
@@ -147,9 +147,6 @@ recreate:
 show-containers:
 	@bash scripts/compose/manage-compose.sh ps
 
-configure-caddy:
-	@bash scripts/root.sh scripts/caddy/configure.sh
-
 configure-services:
 	@bash scripts/root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
 
@@ -171,8 +168,8 @@ pull-stack:
 show-logs:
 	@bash scripts/compose/configure-services.sh logs "$$STACK"
 
-create-deploy-key:
-	@REPO='$(REPO)' KEY_PREFIX='$(KEY_PREFIX)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/create-deploy-key.sh
+deploy-key:
+	@REPO='$(REPO)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/deploy-key.sh
 
 deploy-stack:
 	@bash scripts/deploy/deploy-stack.sh

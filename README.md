@@ -146,18 +146,19 @@ It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
 
-## 5. Configure Caddy
+## 5. Set up Caddy
 
 Caddy runs as a native systemd service. Docker does not run Caddy. The setup
 command builds Caddy with the Cloudflare DNS module, installs it under
-`/usr/local/bin/caddy`, enables it at boot, and creates the first site:
+`/usr/local/bin/caddy`, enables it at boot, and creates the first site. It runs
+as part of `make setup-host`:
 
 ```sh
-make configure-caddy
+make setup-host
 ```
 
-The command asks for a hostname and whether it serves static files or proxies
-to a Docker application. It creates:
+The first run creates an HTTP hello-world site at `example.com` and serves it
+from the server's port 80. It creates:
 
 ```text
 /etc/caddy/Caddyfile
@@ -169,10 +170,13 @@ to a Docker application. It creates:
 Static sites use Caddy's `file_server` with a `hide` block for repository
 metadata, environment files, keys, and logs. Each site also gets custom error
 pages under `/var/www/<domain>/errors/`. Docker applications should bind to
-loopback and use the proxy option in the Caddy site.
+loopback and use a `reverse_proxy` block in the Caddy site. Replace the
+example site in `/etc/caddy/sites-available/example.com.caddy` when you are
+ready to add a real domain.
 
-The Cloudflare token is stored in `/etc/caddy/caddy.env` with mode `0640` and
-is never committed. Caddy listens on ports 80 and 443 and starts on boot.
+The custom binary includes the Cloudflare DNS module. Add the Cloudflare token
+to `/etc/caddy/caddy.env` only when a site needs DNS-01 certificates. Caddy
+listens on ports 80 and 443 and starts on boot.
 
 ## 6. Add services when you need them
 
@@ -198,11 +202,12 @@ For a repository that the host should clone, create a repository-scoped GitHub
 deploy key instead of giving the host a personal GitHub key:
 
 ```sh
-make create-deploy-key REPO=owner/site
+make deploy-key REPO=owner/site
 ```
 
 Add the printed public key to that GitHub repository as a read-only deploy key.
-The command names the private key `jb_<owner>-<repo>_ed25519` and adds a
+The command stores the private key as
+`~/.ssh/deploy-keys/<owner>-<repo>/site_ed25519` and adds a
 repository-specific SSH alias. Clone with the printed `git@github-...` URL.
 
 ## 7. Make changes safely

@@ -225,7 +225,7 @@ case "$command" in
     read_packages "$ROOT/config/apt/packages.txt"
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "Automatic security updates=$SECURITY_UPDATES."
-    note 'Caddy is configured separately as a native service with make configure-caddy.'
+    note 'make setup-host installs Caddy as a native service with the Cloudflare DNS module.'
     note 'Run make configure-services to apply the saved service choices.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
@@ -276,12 +276,12 @@ case "$command" in
     run systemctl enable --now wg-quick@wg0
     ;;
   build-caddy) preview_caddy_build ;;
-  configure-caddy)
-    note 'Install the native Caddy binary, service unit, Cloudflare token, and site files under /etc/caddy.'
-    note 'Create /etc/caddy/sites-available and sites-enabled, /var/www/<domain>, custom errors, and UFW rules for 80/443.'
+  setup-caddy)
+    note 'Install the native Caddy binary, service unit, and Cloudflare DNS module.'
+    note 'Create the enabled example.com site, /var/www/example.com, hello-world page, custom errors, and UFW rules for 80/443.'
     preview_caddy_build
     run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
-    run install -d -m 0755 '/var/www/<domain>/errors'
+    run install -d -m 0755 /var/www/example.com/errors
     run systemctl enable --now caddy
     ;;
   lock-images) preview_image_locks lock ;;
@@ -295,9 +295,9 @@ case "$command" in
   install-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/install.sh" "$@" ;;
   stow-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/stow.sh" "$@" ;;
   refresh-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/refresh.sh" "$@" ;;
-  create-deploy-key)
+  deploy-key)
     [[ ${REPO:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die 'Set REPO=owner/name.'
-    note 'Create one Ed25519 key under ~/.ssh/deploy-keys and a matching github-* SSH alias.'
+    note 'Create one Ed25519 key at ~/.ssh/deploy-keys/<repo>/site_ed25519 and a matching github-* SSH alias.'
     note 'Add its public key to the named GitHub repository as read-only, then clone through that alias.'
     ;;
   configure-ssh)
@@ -332,7 +332,7 @@ case "$command" in
         shift
       done
       validate_config
-      note "Configure the saved VPN setting: $VPN. Caddy is managed by make configure-caddy."
+      note "Configure the saved VPN setting: $VPN. Caddy is installed by make setup-host."
       if [[ $VPN == tailscale ]]; then
         note 'Check /dev/net/tun, save the auth key in /opt/vps/.local/tailscale.env, and start the pinned Tailscale image.'
         run install -d -m 0700 /data/tailscale
