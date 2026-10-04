@@ -25,32 +25,13 @@ Linux machine.
 
 ## 2. Bootstrap a remote VPS
 
-### Temporary password bootstrap
+Use the initial Ubuntu account and password for the first touch. If password
+SSH is unavailable, use the machine's local console. Do not edit SSH
+configuration by hand; the setup script enables temporary access when needed,
+and `make configure-ssh` hardens it afterward.
 
-If a fresh Ubuntu image has no authorized key and password SSH is disabled, log
-in on the local console and set `PasswordAuthentication yes` in
-`/etc/ssh/sshd_config` and the existing cloud-init drop-in, usually
-`/etc/ssh/sshd_config.d/50-cloud-init.conf`. A console-safe update is:
-
-```sh
-sudo sh -c '
-for file in /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*cloud-init*.conf; do
-  [ -f "$file" ] || continue
-  if grep -Eq "^[[:space:]]*PasswordAuthentication[[:space:]]+" "$file"; then
-    sed -Ei "s/^[[:space:]]*PasswordAuthentication[[:space:]].*$/PasswordAuthentication yes/" "$file"
-  else
-    printf "\\nPasswordAuthentication yes\\n" >>"$file"
-  fi
-done
-sshd -t && systemctl restart ssh
-'
-```
-
-The setup script uses those same files on first boot. It does not create a
-second password override. `make configure-ssh` changes them back to `no`,
-disables root login, and requires public keys for the admin user.
-
-Copy the Mac key over port 22. Port 2222 is only for the local VM flow below:
+From the Mac, copy the key and project. Replace `ubuntu` and `HOST` if your
+image uses different values:
 
 ```sh
 cat ~/.ssh/gh_ed25519.pub | ssh -p 22 \
@@ -58,41 +39,62 @@ cat ~/.ssh/gh_ed25519.pub | ssh -p 22 \
   -o PreferredAuthentications=password \
   ubuntu@HOST \
   'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
+rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519' ./ ubuntu@HOST:/home/ubuntu/vps/
 ```
 
-`make configure-ssh` changes the settings back to `no` after key-only SSH
-passes. If the handoff rolls back, it restores the saved SSH files.
-
-Copy the repository to the new host, then run setup as root. The repository is
-moved to `/opt/vps` when setup finishes. Replace `HOST` with the host or SSH
-alias you configured.
+Log in to the box:
 
 ```sh
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519' ./ root@HOST:/root/vps/
-ssh -t -i ~/.ssh/gh_ed25519 root@HOST 'cd /root/vps && ./setup-vps.sh'
+ssh -t -i ~/.ssh/gh_ed25519 ubuntu@HOST
 ```
 
-Keep that session open. In a second terminal, finish the SSH handoff:
+Inside the box, run:
 
 ```sh
-ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make configure-ssh'
-ssh -t -i ~/.ssh/gh_ed25519 admin@HOST 'cd /opt/vps && make confirm-ssh && make sync-time && make setup-host'
+cd ~/vps
+sudo ./setup-vps.sh
 ```
 
-After hardening, log in with the admin account and key on port 22:
+The setup script moves the project to `/opt/vps`, creates the selected admin
+account, installs the base security controls, and prints the handoff steps.
+Replace `admin` below with the admin username selected during setup. Keep that
+session open. Open a fresh key session as the selected admin and harden SSH:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 admin@HOST
+```
+
+Inside that session, run:
+
+```sh
+cd /opt/vps
+make configure-ssh
+```
+
+Open one more fresh key session to confirm the handoff, then finish setup and
+install the optional user environment:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 admin@HOST
+```
+
+Inside that fresh session, run:
+
+```sh
+cd /opt/vps
+make confirm-ssh
+make sync-time
+make setup-host
+make install-dotfiles
+```
+
+After hardening, the normal login is:
 
 ```sh
 ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@HOST
 ```
 
-For the Pi used during setup:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@10.10.90.159
-```
-
-Use `DRY_RUN=1 make setup-host` to preview host changes. Check the result with
-`make show-status` and reboot when ready.
+Use `DRY_RUN=1 make setup-host` to preview host changes and reboot when ready.
 
 ## 3. Bootstrap a local VM
 
@@ -112,16 +114,55 @@ In the VM window, log in as `admin` with the password chosen during creation
 cat ~/.ssh/gh_ed25519.pub | ssh -p 2222 admin@127.0.0.1 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
 ```
 
-Then copy the project and run setup:
+Copy the project from the Mac:
 
 ```sh
 rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/home/admin/vps/
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /home/admin/vps && sudo ./setup-vps.sh'
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /opt/vps && make configure-ssh'
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1 'cd /opt/vps && make confirm-ssh && make sync-time && make setup-host'
 ```
 
-Setup creates `/opt/vps` and moves the project there. Later changes use:
+Then log in and run the same setup flow inside the VM:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
+```
+
+Inside the VM, run:
+
+```sh
+cd ~/vps
+sudo ./setup-vps.sh
+```
+
+After setup moves the project to `/opt/vps`, open a fresh key session:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
+```
+
+Inside that session, run:
+
+```sh
+cd /opt/vps
+make configure-ssh
+```
+
+Open one more fresh key session:
+
+```sh
+ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
+```
+
+Inside that session, run:
+
+```sh
+cd /opt/vps
+make confirm-ssh
+make sync-time
+make setup-host
+make install-dotfiles
+```
+
+Later changes use:
 
 ```sh
 rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/opt/vps/
