@@ -6,10 +6,7 @@ preview_if_requested deploy-key "$@"
 [[ $ROOT == /opt/vps ]] || die 'Run this command from /opt/vps.'
 [[ ${REPO:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die 'Set REPO=example.'
 
-remote_url=$(git remote get-url origin 2>/dev/null || true)
-[[ $remote_url =~ github\.com[:/]([A-Za-z0-9_.-]+)/[A-Za-z0-9_.-]+(\.git)?$ ]] ||
-  die 'Could not determine the GitHub owner from origin.'
-github_owner=${BASH_REMATCH[1]}
+github_owner=${GITHUB_OWNER:-jonathanbecerra}
 repo="$github_owner/$REPO"
 slug=$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')
 key_dir=${DEPLOY_KEY_DIR:-$HOME/.ssh/deploy-keys/$slug}

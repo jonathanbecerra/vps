@@ -218,8 +218,7 @@ make deploy-key REPO=example
 Add the printed public key to that GitHub repository as a read-only deploy key.
 The command stores the private key as
 `~/.ssh/deploy-keys/<repo>/id_ed25519` and adds a repository-specific SSH alias.
-The GitHub owner is read from the VPS repository's `origin`. Clone with the
-printed `git@github-...` URL.
+Clone with the printed `git@github-...` URL.
 
 ## 7. Make changes safely
 
