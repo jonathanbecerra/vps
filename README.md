@@ -1,387 +1,237 @@
 # VPS
 
-This repository turns a fresh Ubuntu machine into a usable Docker host. It
-sets up the admin account, SSH handoff, updates, Docker and Compose, UFW,
-fail2ban, automatic security updates, and the selected Caddy role. App stacks
-are added later.
+Set up an Ubuntu Docker host, then install the [dotfiles](dotfiles/README.md).
+Choose Basic to keep the current account and SSH settings, or Advanced for
+the account and key-only SSH handoff.
 
-## 1. Get the code
+## Start
 
-Clone with the optional user environment included:
+Run on the Ubuntu box, from its console or an existing SSH session.
+
+The guided installer is on `develop` while it is being tested:
 
 ```sh
-git clone --recurse-submodules git@github.com:jonathanbecerra/vps.git
+curl -fsSL https://raw.githubusercontent.com/jonathanbecerra/vps/develop/install.sh | VPS_REF=develop sh
+```
+
+The installer downloads the project and its pinned dotfiles submodule. It
+keeps them in `/opt/vps`, including Git metadata, so you can pull updates.
+It reads prompts from the terminal even when downloaded through a pipe.
+Review the script before running it with sudo. Use the same branch or tag
+in the URL and `VPS_REF`. The default is `main`, which does not contain this
+installer yet.
+
+Or clone the development branch yourself:
+
+```sh
+git clone --branch develop --recurse-submodules https://github.com/jonathanbecerra/vps.git
 cd vps
+sudo --preserve-env=SSH_CONNECTION ./setup-vps.sh
 ```
 
-If the repository is already cloned:
+If the code is already on the box, run that last command there.
+`make setup` opens the same guide when Make is installed.
+If SSH is unavailable, start from the console. A downloaded script cannot
+fix access until you can run it on the box.
 
-```sh
-git submodule update --init --recursive
-```
+### Choose a setup
 
-The root repository configures the box. The `dotfiles/` submodule configures a
-user's shell and editor and can also be used by itself on a Mac or another
-Linux machine.
+| Step | Basic | Advanced |
+| --- | --- | --- |
+| Ubuntu | Synchronize time, update and upgrade | Same |
+| Account | Keep the current non-root user, password, and hostname | Ask for admin username and hostname, then set the password |
+| SSH | Leave authentication unchanged | Copy/check a public key, harden SSH, verify a fresh key login |
+| Caddy and VPN | Both `none` | Ask after the SSH step |
+| Examples | Create both, leave them stopped | Create both, start the example selected by the Caddy mode |
+| Dotfiles | Install for the current user | Install for the selected admin |
 
-## 2. Bootstrap a remote VPS
+Both paths install Docker, UFW, and fail2ban. Automatic security updates
+default to on; an existing host keeps its saved update policy.
+Basic is not a key-only SSH setup. Use Advanced before exposing a fresh box
+publicly. Basic refuses to switch off an existing Caddy or VPN installation.
 
-Use the initial Ubuntu account and password for the first touch. If password
-SSH is unavailable, use the machine's local console. Do not edit SSH
-configuration by hand; the setup script enables temporary access when needed,
-and `make configure-ssh` hardens it afterward.
+Advanced reuses the account you select or creates it if needed. Choosing a
+different username does not rename or delete the account with your active
+session. Its new password remains usable for sudo and console recovery after
+password SSH is disabled.
+New accounts use Bash during the handoff. Setup selects Zsh after dotfiles
+install successfully.
 
-From the Mac, copy the key and project. Replace `ubuntu` and `HOST` if your
-image uses different values:
+### Advanced SSH handoff
 
-```sh
-cat ~/.ssh/gh_ed25519.pub | ssh -p 22 \
-  -o PubkeyAuthentication=no \
-  -o PreferredAuthentications=password \
-  ubuntu@HOST \
-  'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519' ./ ubuntu@HOST:/home/ubuntu/vps/
-```
+Keep the setup terminal open.
 
-Log in to the box:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 ubuntu@HOST
-```
-
-Inside the box, run:
-
-```sh
-cd ~/vps
-sudo ./setup-vps.sh
-```
-
-The setup script moves the project to `/opt/vps`, creates the selected admin
-account, asks whether this host is a public Caddy ingress, private Caddy
-ingress, or has no Caddy, installs the base security controls, and prints the
-handoff steps.
-Replace `admin` below with the admin username selected during setup. Keep that
-session open. Open a fresh key session as the selected admin and harden SSH:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 admin@HOST
-```
-
-Inside that session, run:
-
-```sh
-cd /opt/vps
-make configure-ssh
-```
-
-Open one more fresh key session to confirm the handoff, then finish setup and
-install the optional user environment:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 admin@HOST
-```
-
-Inside that fresh session, run:
+1. If the selected account has no public key, setup waits and prints a
+   `ssh-copy-id` command for your Mac. It checks `authorized_keys` before
+   proceeding. Do not copy a private key.
+2. Setup disables root and password SSH login and starts a five-minute
+   systemd rollback timer. A live countdown stays in the setup terminal.
+3. Open the fresh key-only connection it prints. In that new session, run:
 
 ```sh
 cd /opt/vps
 make confirm-ssh
-make setup-host
-make install-dotfiles
 ```
 
-After hardening, the normal login is:
+Setup checks a receipt for this attempt. Confirmation also checks the SSH
+journal for this connection's public-key login and checks the effective SSH
+policy. Pressing Enter in the original terminal cannot confirm access.
+
+After confirmation, choose to continue or stop. Continuing asks for Caddy
+and VPN, applies them, and installs dotfiles automatically.
+
+If the timer expires, SSH rolls back. Choose `retry` for another five
+minutes, `stop`, or explicitly `continue` without confirmed hardening.
+The last choice prints a red warning. Ctrl-C or Stop at the SSH handoff leaves
+completed package, account, and hostname changes in place. It does not run
+Caddy, VPN, or dotfiles. An armed rollback remains independent of the terminal.
+Do not reboot during the handoff.
+
+After hardening, your normal login is:
 
 ```sh
 ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@HOST
 ```
 
-Use `DRY_RUN=1 make setup-host` to preview host changes and reboot when ready.
+Replace the user, host, key, and port with your values. For the home Pi, for
+example, `admin@10.10.90.159` works only while that remains its address.
+For QEMU, use its forwarded port rather than the guest's port 22.
+See [local VMs](docs/vms.md).
 
-## 3. Bootstrap a local VM
+## Change an existing host
 
-The local VM forwards SSH to a port between `2222` and `2299`.
-
-```sh
-make list-vm
-make start-vm name=lab display=gui
-```
-
-Replace `lab` with your VM name.
-
-In the VM window, log in as `admin` with the password chosen during creation
-(`password` by default). From your Mac, copy your public key into the VM once:
+Inside `/opt/vps`:
 
 ```sh
-cat ~/.ssh/gh_ed25519.pub | ssh -p 2222 admin@127.0.0.1 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys'
+make setup              # run the guide again
+make setup-host         # reapply host packages/security and saved Caddy mode
+make install-dotfiles   # update tools/configs and reload Zsh
+make show-status
 ```
 
-Copy the project from the Mac:
+`make setup` asks again and Advanced resets the selected user's password.
+For routine updates, use the individual commands above.
+Time synchronization is automatic. Reboot separately when Ubuntu requests it.
+
+For a Git-installed checkout:
 
 ```sh
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/home/admin/vps/
+git pull --ff-only
+git submodule sync --recursive
+git submodule update --init --recursive
 ```
 
-Then log in and run the same setup flow inside the VM:
+Then run the step affected by the update. The submodule stays pinned to the
+version reviewed with VPS; do not use `git submodule update --remote` on
+a host just to update VPS.
+
+For an rsync-installed checkout, continue syncing from your Mac:
 
 ```sh
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
+make preview-deploy HOST=admin@HOST
+make sync-repo HOST=admin@HOST
 ```
 
-Inside the VM, run:
-
-```sh
-cd ~/vps
-sudo ./setup-vps.sh
-```
-
-After setup moves the project to `/opt/vps`, open a fresh key session:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
-```
-
-Inside that session, run:
-
-```sh
-cd /opt/vps
-make configure-ssh
-```
-
-Open one more fresh key session:
-
-```sh
-ssh -t -i ~/.ssh/gh_ed25519 -p 2222 admin@127.0.0.1
-```
-
-Inside that session, run:
-
-```sh
-cd /opt/vps
-make confirm-ssh
-make setup-host
-make install-dotfiles
-```
-
-Later changes use:
-
-```sh
-rsync -av --filter="merge .rsyncignore" -e 'ssh -i ~/.ssh/gh_ed25519 -p 2222' ./ admin@127.0.0.1:/opt/vps/
-```
-
-Replace `2222` if your VM uses another forwarded port, or replace the key path
-if your key has a different filename.
-
-## 4. Finish host setup
-
-After SSH is confirmed, run this inside `/opt/vps`:
-
-```sh
-make setup-host
-make install-dotfiles
-```
-
-`make setup-host` synchronizes the clock, installs the host packages and
-security controls, applies the selected Caddy role, and shows the final status.
-The Linux dotfiles installer also checks time synchronization before it uses
-the package manager. There is no separate time-sync command in the public
-Makefile.
+Rsync excludes Git metadata and local secrets. A code-only copy cannot
+`git pull`; do not mix the two update methods.
 
 ### Caddy
 
-Caddy is a native systemd service. `make setup-host` builds it with the
-Cloudflare DNS module, installs it under `/usr/local/bin/caddy`, enables it at
-boot, and applies the role selected during first setup:
+Caddy runs as a native systemd service with the Cloudflare DNS module. Active
+modes build it, enable it at boot, and reconcile the Caddy-managed UFW rules.
 
-| Role | Result | Use it for |
+| Mode | Running example | Caddy rules in UFW |
 | --- | --- | --- |
-| `public` | Provisions both examples, enables the static site, and allows 80/tcp, 443/tcp, and 443/udp in UFW. | A DMZ or public-ingress host serving sites or direct public services. |
-| `private` | Provisions both examples, enables Hono through Caddy, starts its Docker app, and allows Caddy only on the host's private interface. | Internal names such as `scrypted.ohmstack.net` and `hono.ohmstack.net`. |
-| `none` | Provisions both examples but does not install, start, or expose Caddy. | Application-only hosts such as a Pi running Scrypted. |
+| `none` | Neither | Remove managed Caddy rules; disable the Caddy service |
+| `private` | Hono Docker API through `hono.ohmstack.net` | TCP 80/443 on the detected default-route interface |
+| `public` | Static HTTP example from `/var/www/ohmstack.net` | TCP 80/443 and UDP 443 on all interfaces |
 
-New hosts default to `none`; public ingress is always an explicit choice. The
-role is stored in `/etc/caddy/caddy.conf`; `/etc/vps/host.conf` stores
-host and VPN settings only. If an older host has no Caddy role file,
-`make setup-host` asks once and defaults safely to private ingress. The
-Cloudflare token belongs in `/etc/caddy/caddy.env`.
+Both examples always exist at `/var/www/ohmstack.net` and
+`/var/app/hono.ohmstack.net`. Private starts Hono at `127.0.0.1:3000`.
+These example names assume you control `ohmstack.net`; use your own zone otherwise.
+Changing modes does not delete either project or stop a previously started
+Hono container. Manage it from its own Compose directory.
 
-Both examples are provisioned on every role. `public` enables the static site
-under `/var/www/ohmstack.net`; `private` enables `hono.ohmstack.net`, creates
-the app under `/var/app/hono.ohmstack.net`, and builds/starts its Docker
-Compose project. `none` leaves both examples on disk without exposing either
-through Caddy. Rerunning `make setup-host` reconciles the Caddy-managed UFW
-rules and keeps the selected bootstrap site enabled.
+Private still uses Cloudflare for trusted certificates. It does not mean
+the interface blocks internet sources. Keep WAN forwarding off and use
+UniFi/VPN rules for private access, including IPv6. Internal DNS should
+resolve private names to Caddy's LAN address.
 
-`public` means the host is prepared to receive public traffic; individual
-hostnames still depend on their DNS records, Cloudflare settings, router
-forwarding, and Caddy site files. `private` still uses Cloudflare for DNS-01
-certificate validation, but it must not have a WAN port-forward. UniFi remains
-responsible for the VLAN boundary, while UFW limits the host-side listener.
-
-Site configs live in `/etc/caddy/sites-available/`, are enabled through
-`sites-enabled/`, and use these runtime paths:
-
-```text
-/var/www/ohmstack.net/          Static example site
-/var/app/hono.ohmstack.net/     Hono Docker example
-/var/www/<domain>/              Other static file-server sites
-/var/app/<project>/             Other Docker applications and Compose files
-```
-
-The provisioning repository remains in `/opt/vps`. It owns the templates and
-examples; runtime application data belongs under `/var/app` or `/var/www`.
-
-The parent Caddyfile keeps Caddy's admin API on the local
-`/run/caddy/admin.sock` with mode `0600`; systemd uses it for safe reloads
-without exposing an admin port.
-
-The Cloudflare token is used by both Caddy roles when a site uses DNS-01
-certificate validation. This lets Caddy prove domain ownership through a TXT
-record for private names, wildcard domains, or when HTTP validation is
-unsuitable. In Cloudflare, go to **My Profile → API Tokens → Create Token** and
-use **Edit zone DNS**, limited to the specific zone, with:
-
-```text
-Zone:Read
-DNS:Edit
-```
-
-Do not use a Global API Key. See the [Cloudflare token guide](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
-and [Caddy's DNS challenge options](https://caddyserver.com/docs/caddyfile/options#acme_dns).
-
-On the host, store the token in `/etc/caddy/caddy.env`:
+The role lives in `/etc/caddy/caddy.conf`. To change it without rerunning
+the account/SSH guide:
 
 ```sh
-sudo install -o root -g caddy -m 0640 /dev/null /etc/caddy/caddy.env
-sudoedit /etc/caddy/caddy.env
+sudoedit /etc/caddy/caddy.conf   # CADDY_MODE=none, private, or public
+make setup-host
 ```
 
-Add:
+The parent Caddyfile imports `sites-enabled/*.caddy`. Put sites in
+`/etc/caddy/sites-available`, then symlink them into `sites-enabled`.
+The parent and service unit are managed by setup; put custom sites in the
+site directory. Existing site and app examples are preserved, not overwritten.
+The local admin socket is `/run/caddy/admin.sock`, not an
+exposed TCP port.
 
-```text
-CLOUDFLARE_API_TOKEN=your-token
-```
+For Cloudflare, create an API token under **My Profile > API Tokens**.
+Use **Edit zone DNS**, restricted to your zone, with **Zone:Read** and
+**DNS:Edit**. Setup asks for it when Private needs one. It stores
+`CLOUDFLARE_API_TOKEN=...` in `/etc/caddy/caddy.env`, which systemd already
+loads. To change it, use `sudoedit /etc/caddy/caddy.env`.
 
-The systemd service already loads that file. Caddy uses the token only when the
-site references it. The private Hono example already does this:
-
-```caddyfile
-hono.ohmstack.net {
-  tls {
-    dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-  }
-
-  reverse_proxy 127.0.0.1:3000
-}
-```
-
-For private names, create an internal DNS record such as
-`hono.ohmstack.net → <private-Caddy-IP>`. Do not publish a public `A` or `AAAA`
-record for a service that should remain internal. Caddy can still obtain the
-publicly trusted certificate through Cloudflare DNS-01.
-
-Reload Caddy after changing the token or site:
+This token is for DNS-01 certificate validation, not DDNS. Caddy still gets
+the certificate from an ACME issuer. The public starter is HTTP until you
+give the site a domain and configure HTTPS.
+See [Cloudflare tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+and [Caddy DNS challenges](https://caddyserver.com/docs/caddyfile/directives/tls#dns).
 
 ```sh
-sudo systemctl reload caddy
+sudo systemctl reload caddy    # site/Caddyfile changes
+sudo systemctl restart caddy   # token, binary, or service changes
+sudo systemctl status caddy
+sudo journalctl -u caddy -n 50 --no-pager
 ```
 
-The private role creates a small Hono TypeScript API at
-`/var/app/hono.ohmstack.net`, builds it with Docker, and binds it only to
-`127.0.0.1:3000`. It serves:
+Static sites import `security` and `conceal`; `conceal` already includes
+`file_server`. Point build outputs at `/var/www/<domain>/dist`, not the
+project checkout. Do not place secrets there or symlink outside that root.
+Docker apps belong under `/var/app/<project>` and bind published ports to
+loopback for Caddy to proxy.
 
-```text
-GET /          {"message":"Hello from Hono","service":"hono"}
-GET /api/hello {"message":"Hello from Hono"}
-GET /healthz   {"ok":true}
-```
+### VPN and applications
 
-The example uses `pnpm@12.8.1`, matching the dotfiles setup. It is a Node.js
-API using Hono's Node adapter, so it does not need Vite. Hono's Vite plugins
-are for front-end/framework templates; add Vite when this project grows a
-browser-facing frontend. See the [Hono Node.js guide](https://hono.dev/docs/getting-started/nodejs).
-For local work:
+`make configure-vpn vpn=tailscale` or `vpn=wireguard` saves and applies
+that VPN. Tailscale accepts an auth key or browser login. WireGuard prints
+the client profile location. Switching VPNs requires stopping the old one
+first from a connection that does not depend on it.
+
+Use Compose in each app directory, or use `lazydocker`:
 
 ```sh
 cd /var/app/hono.ohmstack.net
-pnpm install
-pnpm run build
-```
-
-Static sites should import the reusable `conceal` snippet. It hides repository
-metadata, environment files, keys, logs, editor files, backups, and source
-maps. For Astro, Angular, React, or similar builds, point `root` at
-`/var/www/<domain>/dist`; Caddy then serves only that directory, not its
-parent. Docker applications should live under `/var/app/<project>`, bind to
-loopback, and use a `reverse_proxy` block in the site config.
-
-## 5. Add the optional dotfiles
-
-On the host, run it from the submodule checkout:
-
-```sh
-cd /opt/vps/dotfiles
-make install
-```
-
-On a Mac, clone the standalone repository and run the same `make install`
-there. Both install commands reload Zsh after Stow completes. From the VPS
-root, `make install-dotfiles` calls the same entry point.
-It does not change host users, SSH, firewalls, Docker, or services. See
-[dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
-cleanup.
-
-## 6. Run applications
-
-Application projects live under `/var/app/<project>`. Static sites live under
-`/var/www/<domain>`. Each Docker project owns its Compose file and runs from
-its own directory. The dotfiles install adds short Docker commands and
-`lazydocker` is available for interactive management:
-
-```sh
-cd /var/app/<project>
 dcup
 dcps
-dlogs <container>
 dcdown
 ```
 
-Use `dcrs` to restart a Compose project. Use `dstall` to stop every running
-container on the host. `dts <container>` removes one container, its image when
-unused, and its unused named volumes while preserving Docker networks. `dtd`
-is the confirmed global teardown and removes all unused Docker data, including
-networks and volumes. Keep app ports behind Caddy and bind any host port to
-`127.0.0.1`.
+The Hono template lives in [build/hono](build/hono). It uses TypeScript,
+Node, and pnpm. It serves `/`, `/api/hello`, and
+`/healthz`. It does not need Vite for this API-only example.
 
-`make show-status` reports published ports that listen outside loopback. UFW
-and UniFi remain responsible for the host and network-zone boundaries.
+`make deploy-key REPO=example` creates a repository-scoped key at
+`~/.ssh/deploy-keys/example/id_ed25519` and prints the GitHub setup steps.
+Use a read-only deploy key instead of copying a personal GitHub private key.
 
-Point each hostname at the VPS. Caddy exposes the site or reverse proxy, while
-the application remains on its local Docker network or loopback port.
+## Where things live
 
-For a repository that the host should clone, create a repository-scoped GitHub
-deploy key instead of giving the host a personal GitHub key:
+| Path | Owner |
+| --- | --- |
+| `/opt/vps` | Setup scripts, templates, pinned dotfiles checkout |
+| `/etc/vps/host.conf` | Saved hostname, admin, VPN, update choices |
+| `/etc/caddy` | Caddy mode, token, and site configuration |
+| `/var/www/<domain>` | Static files |
+| `/var/app/<project>` | Docker application and Compose file |
+| `/data` | Persistent service data and backups |
 
-```sh
-make deploy-key REPO=example
-```
-
-Add the printed public key to that GitHub repository as a read-only deploy key.
-The command stores the private key as
-`~/.ssh/deploy-keys/<repo>/id_ed25519` and adds a repository-specific SSH alias.
-Clone with the printed `git@github-...` URL.
-
-## 7. Make changes safely
-
-Run checks before copying changes to a host:
-
-```sh
-make check-repo
-make preview-deploy HOST=HOST
-make sync-repo HOST=HOST
-```
-
-For a local VM, use the forwarded port and key shown in the local VM section.
-Always sync to `/opt/vps` after setup, never the temporary home checkout. Host
-packages live in `config/apt/packages.txt`; the standalone dotfiles repository
-owns user tools and its Homebrew manifest.
+Host dependencies live in `config/apt`; user tools belong to dotfiles.
+Run `make check-repo` before deployment. `DRY_RUN=1 make <target>` previews
+supported commands without changing the host.
