@@ -3,7 +3,6 @@
 set -eu
 
 install_vps() {
-  exec </dev/tty
   [ "$(uname -s)" = Linux ] || {
     printf 'Run this on the Ubuntu box.\n' >&2
     exit 1
@@ -41,4 +40,6 @@ install_vps() {
   elevate bash "$checkout/vps/setup-vps.sh" "$@"
 }
 
-install_vps "$@"
+# Restore the pipe after prompts finish so sh reaches EOF and exits.
+# A permanent `exec </dev/tty` leaves a piped shell waiting for more commands.
+install_vps "$@" </dev/tty
