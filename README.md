@@ -56,6 +56,8 @@ Both paths install Docker, UFW, and fail2ban. Automatic security updates
 default to on; an existing host keeps its saved update policy.
 Basic is not a key-only SSH setup. Use Advanced before exposing a fresh box
 publicly. Basic refuses to switch off an existing Caddy or VPN installation.
+After Basic, run `make setup mode=advanced` inside `/opt/vps` to configure
+key-only SSH and service choices using the existing checkout and settings.
 
 Advanced reuses the account you select or creates it if needed. Choosing a
 different username does not rename or delete the account with your active
@@ -63,6 +65,17 @@ session. Its new password remains usable for sudo and console recovery after
 password SSH is disabled.
 New accounts use Bash during the handoff. Setup selects Zsh after dotfiles
 install successfully.
+
+### Copy your SSH key
+
+From your Mac, while password SSH is enabled:
+
+```sh
+ssh-copy-id -i ~/.ssh/id_ed25519.pub admin@HOST
+```
+
+Use your public key filename, such as `gh_ed25519.pub`, and the host's admin
+username. For a VM, add `-p PORT` with the forwarded port from `make list-vm`.
 
 ### Advanced SSH handoff
 
@@ -103,7 +116,7 @@ ssh -t -i ~/.ssh/gh_ed25519 -p 22 admin@HOST
 Replace the user, host, key, and port with your values. For the home Pi, for
 example, `admin@10.10.90.159` works only while that remains its address.
 For QEMU, use its forwarded port rather than the guest's port 22.
-See [local VMs](docs/vms.md).
+See [local VM testing](#local-vm-testing).
 
 ## Change an existing host
 
@@ -240,5 +253,52 @@ Use a read-only deploy key instead of copying a personal GitHub private key.
 | `/data` | Persistent service data and backups |
 
 Host dependencies live in `config/apt`; user tools belong to dotfiles.
-Run `make check-repo` before deployment. `DRY_RUN=1 make <target>` previews
-supported commands without changing the host.
+
+## Testing
+
+From the VPS checkout:
+
+```sh
+make check-repo
+make -C dotfiles check
+DRY_RUN=1 make setup mode=basic
+DRY_RUN=1 make setup mode=advanced
+DRY_RUN=1 make setup-host
+```
+
+Dry runs print planned steps without changing the host. They skip prompts
+and live host checks, so use a disposable VM for a full setup test.
+
+### Local VM testing
+
+The VM commands use QEMU on an Apple silicon Mac. Install `qemu` and
+`openssl@3` with Homebrew. The Ubuntu ARM64 image must be at
+`~/Developer/distros/ubuntu-26.04/ubuntu-26.04-server-cloudimg-arm64.img`.
+
+```sh
+make create-vm name=lab
+make list-vm
+make start-vm name=lab display=gui
+```
+
+Log in as `admin` with the password chosen during creation. Pressing Enter
+there uses `password`, for isolated test VMs only. For SSH from the Mac,
+replace `PORT` with the forwarded port shown by `make list-vm`, not port 22:
+
+```sh
+ssh -t -p PORT admin@127.0.0.1
+```
+
+Inside the VM, run the curl command under [Start](#start). If `/opt/vps`
+already exists, [update that checkout](#change-an-existing-host) first.
+Test Basic and Advanced on separate fresh VMs. Keep the console open during
+the Advanced SSH handoff; its key-copy and login commands need the Mac's
+forwarded port too. Test both confirmation and the five-minute rollback.
+
+Stop or remove the test VM from the Mac. Teardown asks for confirmation
+before deleting the VM and its disk:
+
+```sh
+make stop-vm name=lab
+make teardown-vm name=lab
+```

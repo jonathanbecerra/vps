@@ -1,4 +1,5 @@
 .local/
+/docs/
 .image-lock.*/
 build/hono/dist/
 build/hono/node_modules/
