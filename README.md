@@ -8,10 +8,8 @@ the account and key-only SSH handoff.
 
 Run on the Ubuntu box, from its console or an existing SSH session.
 
-The guided installer is on `develop` while it is being tested:
-
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jonathanbecerra/vps/develop/install.sh | VPS_REF=develop sh
+curl -fsSL https://raw.githubusercontent.com/jonathanbecerra/vps/main/install.sh | sh
 ```
 
 The installer downloads the project and its pinned dotfiles submodule. It
@@ -25,14 +23,14 @@ is hidden unless a step fails; Caddy's build stays live. Password prompts and
 the SSH rollback countdown stay visible. Use `make show-status` in `/opt/vps`
 for the full health report after setup.
 
-Review the script before running it with sudo. Use the same branch or tag
-in the URL and `VPS_REF`. The default is `main`, which does not contain this
-installer yet.
+Review the script before running it with sudo. It defaults to `main`.
+To test another branch or tag, use that ref in the URL and pass the same
+value as `VPS_REF` to `sh`.
 
-Or clone the development branch yourself:
+Or clone the project yourself:
 
 ```sh
-git clone --branch develop --recurse-submodules https://github.com/jonathanbecerra/vps.git
+git clone --recurse-submodules https://github.com/jonathanbecerra/vps.git
 cd vps
 sudo --preserve-env=SSH_CONNECTION ./setup-vps.sh
 ```
@@ -42,11 +40,16 @@ If the code is already on the box, run that last command there.
 If SSH is unavailable, start from the console. A downloaded script cannot
 fix access until you can run it on the box.
 
-When setup finishes, log out and log back in to activate Zsh and Docker group
-access. The final screen shows login commands for the selected account.
-When connected over SSH, test a fresh connection before closing the old one.
-For a VM, use its Mac-side forwarded port, not the guest's SSH port.
-Copying an SSH key alone does not disable password or root SSH login.
+After Basic, log out and log back in to activate Zsh and Docker group access.
+The final screen shows login commands for the selected account. Over SSH,
+test a fresh connection before closing the old one. For a VM, use its
+Mac-side forwarded port, not the guest's SSH port. Copying a key alone does
+not disable password or root SSH login.
+
+After Advanced finishes with confirmed SSH hardening, run `sudo reboot`,
+then reconnect with the key you verified. A fresh login activates Zsh and
+the Docker group; the reboot also applies pending kernel updates.
+Setup never reboots automatically.
 
 ### Choose a setup
 
@@ -103,6 +106,8 @@ make confirm-ssh
 Setup checks a receipt for this attempt. Confirmation also checks the SSH
 journal for this connection's public-key login and checks the effective SSH
 policy. Pressing Enter in the original terminal cannot confirm access.
+If your SSH config shares connections, add `-S none` to the printed SSH
+command so confirmation uses a new connection.
 
 After confirmation, choose to continue or stop. Continuing asks for Caddy
 and VPN, applies them, and installs dotfiles automatically.
@@ -201,13 +206,21 @@ exposed TCP port.
 
 For Cloudflare, create an API token under **My Profile > API Tokens**.
 Use **Edit zone DNS**, restricted to your zone, with **Zone:Read** and
-**DNS:Edit**. Setup asks for it when Private needs one. It stores
-`CLOUDFLARE_API_TOKEN=...` in `/etc/caddy/caddy.env`, which systemd already
-loads. To change it, use `sudoedit /etc/caddy/caddy.env`.
+**DNS:Edit**. Private setup asks for it with hidden input, retries empty or
+invalid pastes, and reports where it saved the token. The token belongs in
+`/etc/caddy/caddy.env`, not `caddy.conf`; systemd already loads that file.
+To add or replace it manually:
+
+```sh
+sudoedit /etc/caddy/caddy.env   # CLOUDFLARE_API_TOKEN=your-token, one assignment
+sudo systemctl restart caddy
+```
 
 This token is for DNS-01 certificate validation, not DDNS. Caddy still gets
-the certificate from an ACME issuer. The public starter is HTTP until you
-give the site a domain and configure HTTPS.
+the certificate from an ACME issuer. Public setup does not prompt for a
+token, so `caddy.env` may be empty. Its starter is HTTP until you give the
+site a domain and configure HTTPS. Add the token if that site uses
+`dns cloudflare {env.CLOUDFLARE_API_TOKEN}` for DNS validation.
 See [Cloudflare tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
 and [Caddy DNS challenges](https://caddyserver.com/docs/caddyfile/directives/tls#dns).
 
