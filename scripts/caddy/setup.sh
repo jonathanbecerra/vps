@@ -43,9 +43,34 @@ if [[ -f $VPS_HOST_CONFIG ]] && grep -Eq '^[[:space:]]*CADDY_MODE=' "$VPS_HOST_C
   sed -Ei '/^[[:space:]]*CADDY_MODE=/d' "$VPS_HOST_CONFIG"
 fi
 
+admin_group=$(id -gn "$ADMIN_USER")
+install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 \
+  /var/www/ohmstack.net /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
+
+ensure_static_example() {
+  [[ -f /var/www/ohmstack.net/index.html ]] || install -o "$ADMIN_USER" -g "$admin_group" -m 0644 \
+    "$ROOT/config/caddy/www/ohmstack.net/index.html" /var/www/ohmstack.net/index.html
+  for status in 404 500; do
+    [[ -f /var/www/ohmstack.net/errors/$status.html ]] || install -o "$ADMIN_USER" -g "$admin_group" -m 0644 \
+      "$ROOT/config/caddy/www/ohmstack.net/errors/$status.html" "/var/www/ohmstack.net/errors/$status.html"
+  done
+}
+
+ensure_hono_app() {
+  local app_dir=/var/app/hono.ohmstack.net
+  [[ -e "$app_dir/compose.yaml" ]] || {
+    cp -a "$ROOT/examples/hono/." "$app_dir/"
+    chown -R "$ADMIN_USER:$admin_group" "$app_dir"
+  }
+}
+
+ensure_static_example
+ensure_hono_app
+
 if [[ $CADDY_MODE == none ]]; then
   clear_caddy_ufw_rules
   disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
+  disable_bootstrap_site /etc/caddy/sites-enabled/ohmstack.net.caddy
   disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
   systemctl disable --now caddy 2>/dev/null || true
   note 'Caddy is disabled for this host.'
@@ -57,7 +82,6 @@ if ! getent group "$caddy_user" >/dev/null; then groupadd --system "$caddy_user"
 if ! id "$caddy_user" >/dev/null 2>&1; then
   useradd --system --gid "$caddy_user" --home-dir /var/lib/caddy --shell /usr/sbin/nologin "$caddy_user"
 fi
-admin_group=$(id -gn "$ADMIN_USER")
 install -d -o root -g "$caddy_user" -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
 install -d -o caddy -g caddy -m 0750 /var/lib/caddy /var/log/caddy /run/caddy
 install -d -o root -g root -m 0755 /var/www /var/app
@@ -73,13 +97,8 @@ if [[ ! -f /etc/systemd/system/caddy.service ]] || ! cmp -s "$ROOT/config/caddy/
   install -m 0644 "$ROOT/config/caddy/caddy.service" /etc/systemd/system/caddy.service
 fi
 
-setup_hono() {
-  local app_dir=/var/app/hono
-  [[ -e "$app_dir/compose.yaml" ]] || {
-    install -d -o "$ADMIN_USER" -g "$admin_group" -m 0755 "$app_dir"
-    cp -a "$ROOT/examples/hono/." "$app_dir/"
-    chown -R "$ADMIN_USER:$admin_group" "$app_dir"
-  }
+start_hono() {
+  local app_dir=/var/app/hono.ohmstack.net
   find_compose
   progress 'Build and start Hono example' --interactive "${COMPOSE[@]}" \
     -f "$app_dir/compose.yaml" up -d --build
@@ -87,26 +106,21 @@ setup_hono() {
 
 if [[ $CADDY_MODE == public ]]; then
   disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
+  disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
   if ! compgen -G '/etc/caddy/sites-enabled/*.caddy' >/dev/null; then
-    site_file=/etc/caddy/sites-available/example.com.caddy
-    install -d -o "$ADMIN_USER" -g "$caddy_user" -m 0755 /var/www/example.com /var/www/example.com/errors
-    [[ -f /var/www/example.com/index.html ]] || install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
-      "$ROOT/config/caddy/www/example.com/index.html" /var/www/example.com/index.html
-    for status in 404 500; do
-      [[ -f /var/www/example.com/errors/$status.html ]] || install -o "$ADMIN_USER" -g "$caddy_user" -m 0644 \
-        "$ROOT/config/caddy/www/example.com/errors/$status.html" "/var/www/example.com/errors/$status.html"
-    done
+    site_file=/etc/caddy/sites-available/ohmstack.net.caddy
     [[ -e $site_file ]] || install -o root -g "$caddy_user" -m 0644 \
-      "$ROOT/config/caddy/sites/example.com.caddy" "$site_file"
+      "$ROOT/config/caddy/sites/ohmstack.net.caddy" "$site_file"
     ln -sfn "../sites-available/$(basename "$site_file")" "/etc/caddy/sites-enabled/$(basename "$site_file")"
   fi
 else
   disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
+  disable_bootstrap_site /etc/caddy/sites-enabled/ohmstack.net.caddy
   site_file=/etc/caddy/sites-available/hono.ohmstack.net.caddy
   [[ -e $site_file ]] || install -o root -g "$caddy_user" -m 0644 \
     "$ROOT/config/caddy/sites/hono.ohmstack.net.caddy" "$site_file"
   ln -sfn "../sites-available/$(basename "$site_file")" "/etc/caddy/sites-enabled/$(basename "$site_file")"
-  setup_hono
+  start_hono
 fi
 
 step 'Build and install Caddy'
@@ -141,9 +155,9 @@ else
 fi
 systemctl is-active --quiet caddy || die 'Caddy did not start.'
 if [[ $CADDY_MODE == public ]]; then
-  note 'Caddy is running with the example site at /var/www/example.com.'
+  note 'Caddy is running with the example site at /var/www/ohmstack.net.'
 elif [[ -e /etc/caddy/sites-enabled/hono.ohmstack.net.caddy ]]; then
-  note 'Caddy is running privately with hono.ohmstack.net backed by /var/app/hono.'
+  note 'Caddy is running privately with hono.ohmstack.net backed by /var/app/hono.ohmstack.net.'
 else
   note 'Caddy is running privately with the existing site configuration.'
 fi

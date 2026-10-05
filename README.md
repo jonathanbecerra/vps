@@ -193,9 +193,9 @@ boot, and applies the role selected during first setup:
 
 | Role | Result | Use it for |
 | --- | --- | --- |
-| `public` | Installs Caddy, creates the initial static site, and allows 80/tcp, 443/tcp, and 443/udp in UFW. | A DMZ or public-ingress host serving sites or direct public services. |
-| `private` | Installs Caddy and the Cloudflare DNS module, creates the Hono Docker example, and allows Caddy only on the host's private interface. | Internal names such as `scrypted.ohmstack.net` and `hono.ohmstack.net`. |
-| `none` | Does not install or start Caddy. | Application-only hosts such as a Pi running Scrypted. |
+| `public` | Provisions both examples, enables the static site, and allows 80/tcp, 443/tcp, and 443/udp in UFW. | A DMZ or public-ingress host serving sites or direct public services. |
+| `private` | Provisions both examples, enables Hono through Caddy, starts its Docker app, and allows Caddy only on the host's private interface. | Internal names such as `scrypted.ohmstack.net` and `hono.ohmstack.net`. |
+| `none` | Provisions both examples but does not install, start, or expose Caddy. | Application-only hosts such as a Pi running Scrypted. |
 
 New hosts default to `none`; public ingress is always an explicit choice. The
 role is stored in `/etc/caddy/caddy.conf`; `/etc/vps/host.conf` stores
@@ -203,11 +203,12 @@ host and VPN settings only. If an older host has no Caddy role file,
 `make setup-host` asks once and defaults safely to private ingress. The
 Cloudflare token belongs in `/etc/caddy/caddy.env`.
 
-The bootstrap site follows the role: `public` enables the static example site
-under `/var/www/example.com`; `private` enables `hono.ohmstack.net`, creates
-the app under `/var/app/hono`, and builds/starts its Docker Compose project.
-Rerunning `make setup-host` reconciles the Caddy-managed UFW rules and keeps
-the selected bootstrap site enabled.
+Both examples are provisioned on every role. `public` enables the static site
+under `/var/www/ohmstack.net`; `private` enables `hono.ohmstack.net`, creates
+the app under `/var/app/hono.ohmstack.net`, and builds/starts its Docker
+Compose project. `none` leaves both examples on disk without exposing either
+through Caddy. Rerunning `make setup-host` reconciles the Caddy-managed UFW
+rules and keeps the selected bootstrap site enabled.
 
 `public` means the host is prepared to receive public traffic; individual
 hostnames still depend on their DNS records, Cloudflare settings, router
@@ -219,8 +220,10 @@ Site configs live in `/etc/caddy/sites-available/`, are enabled through
 `sites-enabled/`, and use these runtime paths:
 
 ```text
-/var/www/<domain>/       Static file-server sites
-/var/app/<project>/     Docker applications and their Compose files
+/var/www/ohmstack.net/          Static example site
+/var/app/hono.ohmstack.net/     Hono Docker example
+/var/www/<domain>/              Other static file-server sites
+/var/app/<project>/             Other Docker applications and Compose files
 ```
 
 The provisioning repository remains in `/opt/vps`. It owns the templates and
@@ -282,7 +285,7 @@ sudo systemctl reload caddy
 ```
 
 The private role creates a small Hono TypeScript API at
-`/var/app/hono`, builds it with Docker, and binds it only to
+`/var/app/hono.ohmstack.net`, builds it with Docker, and binds it only to
 `127.0.0.1:3000`. It serves:
 
 ```text
@@ -298,7 +301,7 @@ browser-facing frontend. See the [Hono Node.js guide](https://hono.dev/docs/gett
 For local work:
 
 ```sh
-cd /var/app/hono
+cd /var/app/hono.ohmstack.net
 pnpm install
 pnpm run build
 ```

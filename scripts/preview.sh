@@ -279,14 +279,15 @@ case "$command" in
   setup-caddy)
     case $CADDY_MODE in
       none)
-        note 'Caddy is disabled for this host.'
+        note 'Caddy is disabled; provision /var/www/ohmstack.net and /var/app/hono.ohmstack.net without enabling either site.'
+        run install -d -m 0755 /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
         ;;
       public)
         note 'Install native Caddy with the Cloudflare DNS module for public ingress.'
-        note 'Create the enabled example.com file-server site, /var/www/example.com, custom errors, and UFW rules for 80/443.'
+        note 'Provision both examples, enable the ohmstack.net file-server site, and apply UFW rules for 80/443.'
         preview_caddy_build
         run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled
-        run install -d -m 0755 /var/www/example.com/errors
+        run install -d -m 0755 /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
         run ufw allow 80/tcp comment 'Caddy HTTP'
         run ufw allow 443/tcp comment 'Caddy HTTPS'
         run ufw allow 443/udp comment 'Caddy HTTP3'
@@ -294,10 +295,10 @@ case "$command" in
         ;;
       private)
         note 'Install native Caddy with the Cloudflare DNS module for private ingress.'
-        note 'Create hono.ohmstack.net, copy the Hono app to /var/app/hono, bind it to loopback:3000, and allow Caddy only on the private interface.'
+        note 'Provision both examples, enable hono.ohmstack.net, copy the Hono app to /var/app/hono.ohmstack.net, bind it to loopback:3000, and allow Caddy only on the private interface.'
         preview_caddy_build
-        run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled /var/app/hono
-        run docker compose -f /var/app/hono/compose.yaml up -d --build
+        run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
+        run docker compose -f /var/app/hono.ohmstack.net/compose.yaml up -d --build
         run ufw allow in on '<private-interface>' to any port 80 proto tcp comment 'Caddy HTTP (private)'
         run ufw allow in on '<private-interface>' to any port 443 proto tcp comment 'Caddy HTTPS (private)'
         run systemctl enable --now caddy

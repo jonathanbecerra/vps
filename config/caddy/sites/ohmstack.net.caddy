@@ -1,7 +1,7 @@
 :80 {
   import security
   import conceal
-  root * /var/www/example.com
+  root * /var/www/ohmstack.net
 
   handle_errors {
     rewrite * /errors/{err.status_code}.html
