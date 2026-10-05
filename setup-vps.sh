@@ -22,9 +22,13 @@ require_root
 detect_os
 [[ -t 0 ]] || exec </dev/tty
 export VPS_NO_CLEAR=1
-begin 'Set up this Ubuntu box'
-[[ -n $mode ]] || ask mode 'Setup? basic or advanced' basic
-case $mode in basic | advanced) ;; *) die 'Choose basic or advanced.' ;; esac
+panel 'VPS / Ubuntu setup'
+printf '  Docker, host protection, and dotfiles. Ctrl-C stops setup.\n'
+[[ -n $mode ]] || choose mode 'Setup mode' basic \
+  basic 'Keep this account, hostname, and SSH settings' \
+  advanced 'Set the account, verify key-only SSH, choose services'
+setup_started=$SECONDS
+ssh_result='Unchanged'
 
 SERVER_HOSTNAME=$(hostname -s)
 ADMIN_USER=${SUDO_USER:-root}
@@ -53,28 +57,46 @@ if [[ $mode == basic ]]; then
   [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Confirm or roll back the pending SSH change first.'
   SERVER_HOSTNAME=$(hostname -s)
   CADDY_MODE=none VPN=none
-  note "Basic: keep $ADMIN_USER and $SERVER_HOSTNAME, update Ubuntu, install Docker and host protection, create examples, then install dotfiles."
-  note 'SSH authentication and the account password stay as configured.'
+  panel 'Review / basic'
+  field Account "$ADMIN_USER (keep password)"
+  field Hostname "$SERVER_HOSTNAME (keep)"
+  field SSH 'Keep current authentication'
+  field Services 'Caddy off / VPN off / both examples created'
+  field Install 'Ubuntu updates, Docker, UFW, fail2ban, dotfiles'
   confirm 'Start basic setup?'
+  panel '1/4 / Ubuntu and host protection'
   install_base basic
 else
   if [[ ! -d /var/lib/vps-setup/ssh-pending ]]; then
+    panel 'Account and hostname'
     [[ $ADMIN_USER != root ]] || ADMIN_USER='admin'
     ask SERVER_HOSTNAME 'Hostname' "$SERVER_HOSTNAME"
     ask ADMIN_USER 'Admin username' "$ADMIN_USER"
     validate_config
     confirm "Update Ubuntu and set up $ADMIN_USER on $SERVER_HOSTNAME?"
+    panel '1/5 / Ubuntu and account'
     install_base advanced
   else
     note 'Resume the pending SSH confirmation before making other changes.'
     [[ $ROOT == /opt/vps ]] || die 'Resume with sudo /opt/vps/setup-vps.sh --mode advanced.'
     validate_config
   fi
+  panel '2/5 / Verify SSH access'
   ssh_handoff
-  ask next 'SSH step finished. Continue with Caddy, VPN, and dotfiles, or stop?' continue
-  case $next in continue) ;; stop) exit 0 ;; *) die 'Choose continue or stop.' ;; esac
-  ask CADDY_MODE 'Caddy? public, private, or none' "$CADDY_MODE"
-  ask VPN 'VPN? tailscale, wireguard, or none' "$VPN"
+  choose next 'SSH step finished' continue \
+    continue 'Set up services and install dotfiles' \
+    stop 'Keep completed changes; leave services and dotfiles for later'
+  if [[ $next == stop ]]; then
+    note 'Stopped after SSH. Services and dotfiles were not changed.'
+    printf '\tRerun: sudo /opt/vps/setup-vps.sh --mode advanced\n'
+    exit 0
+  fi
+  choose CADDY_MODE 'Caddy' "$CADDY_MODE" \
+    none 'Off; create both examples without starting them' \
+    private 'LAN HTTPS with Cloudflare DNS; start the Hono API' \
+    public 'Public HTTP/HTTPS ports; start the static HTTP example'
+  choose VPN 'VPN' "$VPN" \
+    none 'No VPN' tailscale 'Tailscale container' wireguard 'WireGuard service'
   validate_config
   setup_lock
   write_caddy_config
@@ -84,12 +106,27 @@ fi
 
 # Each installer owns its lock. Do not hold one during another-session handoff.
 export DOTFILES_DIR="$ROOT/dotfiles"
+if [[ $mode == basic ]]; then panel '2/4 / Examples'; else panel '3/5 / Services and examples'; fi
 bash "$ROOT/scripts/caddy/setup.sh"
 bash "$ROOT/scripts/vpn/configure.sh" configure "--vpn=$VPN"
+if [[ $mode == basic ]]; then panel '3/4 / Dotfiles'; else panel '4/5 / Dotfiles'; fi
 bash "$ROOT/scripts/os/install-dotfiles.sh"
 # Keep the SSH handoff on a usable shell until its replacement is configured.
 usermod -s "$(command -v zsh)" "$ADMIN_USER"
-bash "$ROOT/scripts/os/show-status.sh"
-note "Setup finished for $ADMIN_USER on $SERVER_HOSTNAME. Log in again to load the shell and Docker group."
-printf '\tCheckout: /opt/vps\n\tRerun: sudo /opt/vps/setup-vps.sh\n'
+if [[ $mode == basic ]]; then panel '4/4 / Health check'; else panel '5/5 / Health check'; fi
+progress 'Check services, firewall, and listening ports' bash "$ROOT/scripts/os/show-status.sh"
+panel 'Setup complete'
+field Account "$ADMIN_USER@$SERVER_HOSTNAME"
+field SSH "$ssh_result"
+field Caddy "$CADDY_MODE"
+field VPN "$VPN"
+field Checkout /opt/vps
+field Elapsed "$(((SECONDS - setup_started) / 60))m $(((SECONDS - setup_started) % 60))s"
+if [[ $ssh_result == Unchanged ]]; then
+  printf '%s  SSH authentication was left unchanged; Basic does not harden SSH.%s\n' "$C_YELLOW" "$C_RESET"
+elif [[ $ssh_result != Confirmed* ]]; then
+  printf '%s  SSH hardening was not confirmed. Review access before exposing this host.%s\n' "$C_RED" "$C_RESET"
+fi
+printf '\n  Log in again to load Zsh and the Docker group.\n'
+printf '\tStatus: cd /opt/vps && make show-status\n\tRerun: sudo /opt/vps/setup-vps.sh\n'
 [[ ! -f /var/run/reboot-required ]] || note 'Ubuntu needs a reboot. Reboot when ready.'

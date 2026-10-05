@@ -49,7 +49,7 @@ install_base() {
   export ADMIN_USER SERVER_HOSTNAME
   render "$ROOT/config/sudo/admin" /etc/sudoers.d/90-vps-admin ADMIN_USER
   chmod 0440 /etc/sudoers.d/90-vps-admin
-  visudo -cf /etc/sudoers.d/90-vps-admin
+  progress 'Check sudo access' visudo -cf /etc/sudoers.d/90-vps-admin
   step 'Keep the project under /opt/vps'
   install -d -m 0755 /data /etc/caddy "$VPS_CONFIG_DIR" /var/lib/vps-setup
   install -d -m 0700 /data/backups /var/backups/vps-setup
@@ -67,7 +67,7 @@ install_base() {
   write_host_config
   write_caddy_config
   progress 'Install Docker and Compose' bash "$ROOT/scripts/os/install-docker.sh"
-  bash "$ROOT/scripts/os/configure-security.sh"
+  progress 'Configure UFW, fail2ban, and host protection' bash "$ROOT/scripts/os/configure-security.sh"
   release_setup_lock
   trap - EXIT
   [[ $source_repo == /opt/vps ]] || note "Installed at /opt/vps. Your source checkout remains at $source_repo."

@@ -37,4 +37,72 @@ if DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode invalid >/dev/null 2>&1; then die 
 STACK=tailscale DRY_RUN=1 bash "$ROOT/scripts/vpn/lock-tailscale.sh" verify >/dev/null
 vpn=$(DRY_RUN=1 bash "$ROOT/scripts/vpn/configure.sh" configure --vpn=tailscale)
 grep -q 'up -d --no-build' <<<"$vpn" || die 'VPN preview did not include starting Tailscale.'
-printf 'SSH receipt/key guards and basic, advanced, and VPN previews passed.\n'
+
+# Exercise the real guide with inert host operations and file-backed answers.
+flow="$temporary/flow"
+mkdir -p "$flow/scripts/"{os,ssh,caddy,vpn}
+cp "$ROOT/scripts/lib.sh" "$flow/scripts/lib.sh"
+cat >>"$flow/scripts/lib.sh" <<'FIXTURE'
+require_root() { :; }
+detect_os() { :; }
+migrate_legacy_config() { :; }
+setup_lock() { :; }
+release_setup_lock() { :; }
+write_caddy_config() { printf 'caddy-mode=%s\n' "$CADDY_MODE" >>"$ROOT/trace"; }
+hostname() { printf 'fixture-host\n'; }
+usermod() { printf 'shell\n' >>"$ROOT/trace"; }
+ask() {
+  local reply
+  read -r reply
+  printf -v "$1" '%s' "${reply:-${3:-}}"
+}
+VPS_HOST_CONFIG="$ROOT/host.conf"
+CADDY_CONFIG="$ROOT/caddy.conf"
+FIXTURE
+cat >"$flow/scripts/os/install-base.sh" <<'FIXTURE'
+install_base() { printf 'base=%s\n' "$1" >>"$ROOT/trace"; }
+FIXTURE
+cat >"$flow/scripts/ssh/handoff.sh" <<'FIXTURE'
+ssh_handoff() {
+  printf 'ssh\n' >>"$ROOT/trace"
+  ssh_result=${FIXTURE_SSH_RESULT:-Confirmed / keys only}
+}
+FIXTURE
+for script in caddy/setup vpn/configure os/install-dotfiles os/show-status; do
+  cat >"$flow/scripts/$script.sh" <<'FIXTURE'
+#!/usr/bin/env bash
+printf '%s\n' "${0##*/}" >>"$ROOT/trace"
+if [[ $0 == */show-status.sh ]]; then
+  printf 'fixture-health-details\n'
+  exit "${FIXTURE_HEALTH_STATUS:-0}"
+fi
+FIXTURE
+done
+sed -e "s|/dev/tty|$flow/answers|g" \
+  -e "s|/var/lib/vps-setup|$flow/state|g" "$ROOT/setup-vps.sh" >"$flow/setup-vps.sh"
+run_flow() {
+  printf '%s\n' "$@" >"$flow/answers"
+  : >"$flow/trace"
+  env SUDO_USER=admin bash "$flow/setup-vps.sh" </dev/null >"$flow/output" 2>&1
+}
+run_flow 1 yes
+grep -q 'Setup complete' "$flow/output" || die 'Basic did not finish.'
+grep -q 'Unchanged' "$flow/output" || die 'Basic misreported SSH hardening.'
+if grep -qx ssh "$flow/trace"; then die 'Basic entered the SSH handoff.'; fi
+if grep -q fixture-health-details "$flow/output"; then die 'Routine health output was not hidden.'; fi
+run_flow 2 '' '' yes 1 2 1
+grep -q 'Confirmed / keys only' "$flow/output" || die 'Advanced lost the SSH result.'
+grep -qx 'caddy-mode=private' "$flow/trace" || die 'Advanced lost the Caddy choice.'
+grep -qx install-dotfiles.sh "$flow/trace" || die 'Advanced skipped dotfiles.'
+run_flow 2 '' '' yes 2
+if grep -Eq '^(setup.sh|configure.sh|install-dotfiles.sh|shell|show-status.sh)$' "$flow/trace"; then
+  die 'Advanced started services or dotfiles after Stop.'
+fi
+FIXTURE_SSH_RESULT='Not confirmed / rolled back' run_flow 2 '' '' yes 1 1 1
+grep -q 'SSH hardening was not confirmed' "$flow/output" || die 'Completion hid unconfirmed SSH.'
+if FIXTURE_HEALTH_STATUS=7 run_flow 1 yes; then
+  die 'A failed health check passed setup.'
+fi
+grep -q fixture-health-details "$flow/output" || die 'Setup hid a failed health check.'
+if grep -q 'Setup complete' "$flow/output"; then die 'Setup claimed success after a failure.'; fi
+printf 'SSH receipt/key guards, guided flow fixtures, and setup/VPN previews passed.\n'

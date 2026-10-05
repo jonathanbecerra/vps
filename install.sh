@@ -32,7 +32,7 @@ install_vps() {
   trap 'exit 130' INT
   trap 'exit 143' TERM HUP
   printf 'Download VPS and its pinned dotfiles checkout.\n'
-  git clone --branch "${VPS_REF:-main}" --recurse-submodules \
+  git clone --quiet --branch "${VPS_REF:-main}" --recurse-submodules \
     https://github.com/jonathanbecerra/vps.git "$checkout/vps" || {
     printf 'Download failed. A private repository needs an authenticated clone or rsync.\n' >&2
     exit 1

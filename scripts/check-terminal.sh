@@ -5,6 +5,34 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 
+progress 'Quiet success' printf 'routine output\n' >"$temporary/success"
+grep -q 'Done: Quiet success' "$temporary/success" || die 'Missing progress completion.'
+if grep -q 'routine output' "$temporary/success"; then die 'Successful progress leaked routine output.'; fi
+if progress 'Failing step' bash -c 'echo failure-detail >&2; exit 7' >"$temporary/failure" 2>&1; then
+  die 'A failed step passed.'
+else
+  [[ $? == 7 ]] || die 'Lost the failed command status.'
+fi
+grep -q failure-detail "$temporary/failure" || die 'Failure details were hidden.'
+progress 'Caddy build' --interactive printf 'live build output\n' >"$temporary/live"
+grep -q 'live build output' "$temporary/live" || die 'Interactive build output was hidden.'
+if LC_ALL=C grep -q $'\033' "$temporary/success"; then die 'Progress wrote terminal escapes to a pipe.'; fi
+
+# Feed menu answers without requiring a terminal in automated checks.
+ask() {
+  local reply
+  read -r reply
+  printf -v "$1" '%s' "${reply:-$3}"
+}
+choice=''
+choose choice Setup basic basic 'Keep identity' advanced 'Configure SSH' >"$temporary/menu" 2>&1 <<<'invalid
+2'
+[[ $choice == advanced ]] || die 'Menu did not retry or accept a number.'
+choose choice Setup basic basic 'Keep identity' advanced 'Configure SSH' >/dev/null <<<''
+[[ $choice == basic ]] || die 'Menu did not keep the default.'
+choose choice Setup basic basic 'Keep identity' advanced 'Configure SSH' >/dev/null <<<'advanced'
+[[ $choice == advanced ]] || die 'Menu did not accept a name.'
+
 # Replace only machine paths. The real bootstrap function and its redirection run.
 mkdir -p "$temporary/bin" "$temporary/installed"
 printf 'ID=ubuntu\n' >"$temporary/os-release"
@@ -59,4 +87,4 @@ for shell in /bin/sh /bin/dash; do
   done
   rm -f "$temporary/installed/setup-vps.sh"
 done
-printf 'Piped installer checks passed.\n'
+printf 'Menu, progress, and piped installer checks passed.\n'

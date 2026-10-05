@@ -73,7 +73,7 @@ if [[ $CADDY_MODE == none ]]; then
   disable_bootstrap_site /etc/caddy/sites-enabled/ohmstack.net.caddy
   disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
   if [[ $(systemctl show -p LoadState --value caddy.service) != not-found ]]; then
-    systemctl disable --now caddy
+    progress 'Disable Caddy' systemctl disable --now caddy
   fi
   note 'Caddy is disabled for this host.'
   exit 0
@@ -110,7 +110,7 @@ fi
 start_hono() {
   local app_dir=/var/app/hono.ohmstack.net
   find_compose
-  progress 'Build and start Hono example' --interactive "${COMPOSE[@]}" \
+  progress 'Build and start Hono example' "${COMPOSE[@]}" \
     -f "$app_dir/compose.yaml" up -d --build
 }
 
@@ -135,19 +135,18 @@ fi
 
 step 'Build and install Caddy'
 bash "$ROOT/scripts/caddy/build.sh"
-step 'Validate the Caddy configuration'
-validate_caddy
+progress 'Validate the Caddy configuration' validate_caddy
 systemctl daemon-reload
 clear_caddy_ufw_rules
 if [[ $CADDY_MODE == public ]]; then
-  ufw allow 80/tcp comment 'Caddy HTTP'
-  ufw allow 443/tcp comment 'Caddy HTTPS'
-  ufw allow 443/udp comment 'Caddy HTTP3'
+  progress 'Allow public HTTP' ufw allow 80/tcp comment 'Caddy HTTP'
+  progress 'Allow public HTTPS' ufw allow 443/tcp comment 'Caddy HTTPS'
+  progress 'Allow public HTTP/3' ufw allow 443/udp comment 'Caddy HTTP3'
 else
   private_interface=$(ip -o route show default | awk 'NR == 1 {print $5}')
   [[ -n $private_interface ]] || die 'Cannot identify the private network interface for Caddy.'
-  ufw allow in on "$private_interface" to any port 80 proto tcp comment 'Caddy HTTP (private)'
-  ufw allow in on "$private_interface" to any port 443 proto tcp comment 'Caddy HTTPS (private)'
+  progress "Allow HTTP on $private_interface" ufw allow in on "$private_interface" to any port 80 proto tcp comment 'Caddy HTTP (private)'
+  progress "Allow HTTPS on $private_interface" ufw allow in on "$private_interface" to any port 443 proto tcp comment 'Caddy HTTPS (private)'
 fi
 
 mapfile -t legacy_ids < <(docker ps -q --filter label=com.docker.compose.service=caddy)
@@ -157,9 +156,9 @@ if ((${#legacy_ids[@]})); then
   docker stop "${legacy_ids[@]}" >/dev/null
 fi
 
-systemctl enable caddy
+progress 'Enable Caddy at boot' systemctl enable caddy
 # Setup can replace the binary, unit, or environment, which requires a restart.
-systemctl restart caddy
+progress 'Start Caddy' systemctl restart caddy
 systemctl is-active --quiet caddy || die 'Caddy did not start.'
 if [[ $CADDY_MODE == public ]]; then
   note 'Caddy is running with the example site at /var/www/ohmstack.net.'

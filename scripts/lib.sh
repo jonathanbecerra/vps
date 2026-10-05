@@ -44,8 +44,39 @@ begin() {
 
 step() { printf '\n%s›%s %s\n' "$C_CYAN" "$C_RESET" "$*"; }
 
+panel() {
+  printf '\n%s── %s ──%s\n' "$C_CYAN" "$1" "$C_RESET"
+}
+
+field() { printf '  %-12s %s\n' "$1" "$2"; }
+
+# Numbered choices also accept their names. Enter keeps the highlighted default.
+choose() {
+  local variable=$1 label=$2 default=$3 selection index value description marker
+  local -a values=()
+  shift 3
+  panel "$label"
+  while (($#)); do
+    value=$1 description=$2 marker=''
+    shift 2
+    values+=("$value")
+    [[ $value != "$default" ]] || marker=' (default)'
+    printf '  %s%d%s  %-10s %s%s\n' "$C_CYAN" "${#values[@]}" "$C_RESET" "$value" "$description" "$marker"
+  done
+  while :; do
+    ask selection '  Choose a number or name' "$default"
+    for index in "${!values[@]}"; do
+      if [[ $selection == "${values[index]}" || $selection == "$((index + 1))" ]]; then
+        printf -v "$variable" '%s' "${values[index]}"
+        return 0
+      fi
+    done
+    printf '%s  Choose one of the options above.%s\n' "$C_YELLOW" "$C_RESET" >&2
+  done
+}
+
 progress() {
-  local label=$1 log status frame=0 pid interactive=0
+  local label=$1 log status frame=0 pid interactive=0 started=$SECONDS
   # Braille frames work in the terminals used for SSH and the local console.
   local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴')
   shift
@@ -63,9 +94,10 @@ progress() {
   fi
   log=$(mktemp)
   if [[ ! -t 1 || ${TERM:-dumb} == dumb ]]; then
+    printf 'Working: %s\n' "$label"
     if "$@" >"$log" 2>&1; then
       rm -f "$log"
-      printf 'Done: %s\n' "$label"
+      printf 'Done: %s (%ss)\n' "$label" "$((SECONDS - started))"
     else
       status=$?
       printf 'Failed: %s\n' "$label" >&2
@@ -79,12 +111,12 @@ progress() {
   "$@" >"$log" 2>&1 &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
-    printf '\r\033[K%s%s%s %s' "$C_CYAN" "${frames[frame]}" "$C_RESET" "$label"
+    printf '\r\033[K  %s%s%s %s · %ss' "$C_CYAN" "${frames[frame]}" "$C_RESET" "$label" "$((SECONDS - started))"
     sleep 0.12
     frame=$(((frame + 1) % ${#frames[@]}))
   done
   if wait "$pid"; then
-    printf '\r\033[K%s✓%s %s\n' "$C_GREEN" "$C_RESET" "$label"
+    printf '\r\033[K  %s✓%s %s (%ss)\n' "$C_GREEN" "$C_RESET" "$label" "$((SECONDS - started))"
     rm -f "$log"
   else
     status=$?

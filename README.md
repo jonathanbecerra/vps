@@ -17,6 +17,13 @@ curl -fsSL https://raw.githubusercontent.com/jonathanbecerra/vps/develop/install
 The installer downloads the project and its pinned dotfiles submodule. It
 keeps them in `/opt/vps`, including Git metadata, so you can pull updates.
 It reads prompts from the terminal even when downloaded through a pipe.
+
+Numbered choices accept a number, name, or Enter for the default. Setup shows
+stages and short progress lines, then returns to your shell. Routine output
+is hidden unless a step fails; Caddy's build stays live. Password prompts and
+the SSH rollback countdown stay visible. Use `make show-status` in `/opt/vps`
+for the full health report after setup.
+
 Review the script before running it with sudo. Use the same branch or tag
 in the URL and `VPS_REF`. The default is `main`, which does not contain this
 installer yet.

@@ -103,14 +103,24 @@ ssh_handoff() {
     printf '\n\tIn another terminal, open a NEW key-only connection:\n'
     printf '\tssh -t -o ControlMaster=no -o ControlPath=none -o PreferredAuthentications=publickey -i ~/.ssh/gh_ed25519 -p %s %s@%s\n' "$port" "$ADMIN_USER" "$address"
     printf '\tInside that connection:\n\tcd /opt/vps\n\tmake confirm-ssh\n\n'
-    if wait_for_ssh_confirmation "$state_dir" "$attempt" "$deadline" "$boot_id"; then return 0; fi
+    if wait_for_ssh_confirmation "$state_dir" "$attempt" "$deadline" "$boot_id"; then
+      # Read by the guided setup's completion summary.
+      # shellcheck disable=SC2034
+      ssh_result='Confirmed / keys only'
+      return 0
+    fi
     printf '%sSSH IS NOT CONFIRMED. The previous SSH settings are in effect.%s\n' "$C_RED" "$C_RESET"
-    ask choice 'Retry the five-minute handoff, continue without hardening, or stop? retry/continue/stop' stop
+    choose choice 'SSH rolled back' stop \
+      retry 'Start another five-minute handoff' \
+      continue 'Continue WITHOUT confirmed SSH hardening' \
+      stop 'Stop here; leave services and dotfiles unchanged'
     case $choice in
       retry) bash "$ROOT/scripts/ssh/configure-ssh.sh" harden --from-setup ;;
       continue)
         [[ ! -d /var/lib/vps-setup/ssh-pending ]] || die 'Rollback has not finished. Do not continue yet.'
         printf '%sCONTINUING WITHOUT CONFIRMED SSH HARDENING. Password or root access may still be enabled.%s\n' "$C_RED" "$C_RESET"
+        # shellcheck disable=SC2034
+        ssh_result='Not confirmed / rolled back'
         return 0
         ;;
       stop) exit 0 ;;
