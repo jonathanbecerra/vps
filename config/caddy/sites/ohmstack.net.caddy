@@ -5,8 +5,6 @@
 
   handle_errors {
     rewrite * /errors/{err.status_code}.html
-    file_server
+    import conceal
   }
-
-  file_server
 }

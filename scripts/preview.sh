@@ -256,17 +256,20 @@ case "$command" in
         run ufw allow 80/tcp comment 'Caddy HTTP'
         run ufw allow 443/tcp comment 'Caddy HTTPS'
         run ufw allow 443/udp comment 'Caddy HTTP3'
-        run systemctl enable --now caddy
+        run systemctl enable caddy
+        run systemctl restart caddy
         ;;
       private)
         note 'Install native Caddy with the Cloudflare DNS module for private ingress.'
         note 'Provision both examples, enable hono.ohmstack.net, copy the Hono app to /var/app/hono.ohmstack.net, bind it to loopback:3000, and allow Caddy only on the private interface.'
+        note 'Ask for a Cloudflare DNS token if /etc/caddy/caddy.env does not have one.'
         preview_caddy_build
         run install -d -m 0755 /etc/caddy /etc/caddy/sites-available /etc/caddy/sites-enabled /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
         run docker compose -f /var/app/hono.ohmstack.net/compose.yaml up -d --build
         run ufw allow in on '<private-interface>' to any port 80 proto tcp comment 'Caddy HTTP (private)'
         run ufw allow in on '<private-interface>' to any port 443 proto tcp comment 'Caddy HTTPS (private)'
-        run systemctl enable --now caddy
+        run systemctl enable caddy
+        run systemctl restart caddy
         ;;
     esac
     ;;

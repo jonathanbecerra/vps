@@ -440,6 +440,13 @@ ssh_service() {
   if systemctl is-active --quiet ssh.service; then printf 'ssh\n'; else printf 'sshd\n'; fi
 }
 
+validate_caddy() {
+  # Match the service environment without sourcing a token file as shell code.
+  systemd-run --quiet --wait --pipe --collect --property=User=caddy \
+    --property=EnvironmentFile=/etc/caddy/caddy.env \
+    /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile
+}
+
 ssh_ports() {
   local socket
   {

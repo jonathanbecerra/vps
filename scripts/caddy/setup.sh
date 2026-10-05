@@ -72,7 +72,9 @@ if [[ $CADDY_MODE == none ]]; then
   disable_bootstrap_site /etc/caddy/sites-enabled/example.com.caddy
   disable_bootstrap_site /etc/caddy/sites-enabled/ohmstack.net.caddy
   disable_bootstrap_site /etc/caddy/sites-enabled/hono.ohmstack.net.caddy
-  systemctl disable --now caddy 2>/dev/null || true
+  if [[ $(systemctl show -p LoadState --value caddy.service) != not-found ]]; then
+    systemctl disable --now caddy
+  fi
   note 'Caddy is disabled for this host.'
   exit 0
 fi
@@ -87,6 +89,14 @@ install -d -o caddy -g caddy -m 0750 /var/lib/caddy /var/log/caddy /run/caddy
 install -d -o root -g root -m 0755 /var/www /var/app
 if [[ ! -e /etc/caddy/caddy.env ]]; then
   install -o root -g "$caddy_user" -m 0640 /dev/null /etc/caddy/caddy.env
+fi
+if [[ $CADDY_MODE == private ]] && ! grep -Eq '^CLOUDFLARE_API_TOKEN=.+$' /etc/caddy/caddy.env; then
+  note 'Private HTTPS needs a Cloudflare token with Zone:Read and DNS:Edit for this zone.'
+  token=''
+  ask_secret token 'Cloudflare API token'
+  [[ $token =~ ^[A-Za-z0-9_-]+$ ]] || die 'Enter the Cloudflare API token on its own.'
+  printf '\nCLOUDFLARE_API_TOKEN=%s\n' "$token" >>/etc/caddy/caddy.env
+  unset token
 fi
 if [[ ! -f /etc/caddy/Caddyfile ]] || ! cmp -s "$ROOT/config/caddy/Caddyfile" /etc/caddy/Caddyfile; then
   [[ ! -e /etc/caddy/Caddyfile ]] || backup /etc/caddy/Caddyfile
@@ -126,7 +136,7 @@ fi
 step 'Build and install Caddy'
 bash "$ROOT/scripts/caddy/build.sh"
 step 'Validate the Caddy configuration'
-/usr/local/bin/caddy validate --config /etc/caddy/Caddyfile
+validate_caddy
 systemctl daemon-reload
 clear_caddy_ufw_rules
 if [[ $CADDY_MODE == public ]]; then
@@ -148,11 +158,8 @@ if ((${#legacy_ids[@]})); then
 fi
 
 systemctl enable caddy
-if systemctl is-active --quiet caddy; then
-  systemctl reload caddy
-else
-  systemctl start caddy
-fi
+# Setup can replace the binary, unit, or environment, which requires a restart.
+systemctl restart caddy
 systemctl is-active --quiet caddy || die 'Caddy did not start.'
 if [[ $CADDY_MODE == public ]]; then
   note 'Caddy is running with the example site at /var/www/ohmstack.net.'

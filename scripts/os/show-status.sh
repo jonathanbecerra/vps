@@ -69,7 +69,7 @@ if [[ $CADDY_MODE != none ]]; then
     printf '\tRun:\n\t\tmake setup-host\n'
     failed=1
   else
-    /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile || failed=1
+    validate_caddy || failed=1
     systemctl is-enabled --quiet caddy || failed=1
   fi
 fi
