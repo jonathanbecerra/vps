@@ -4,11 +4,10 @@ DOTFILES_DIR ?= $(CURDIR)/dotfiles
 export DOTFILES_DIR
 .PHONY: help
 .PHONY: check-editor check-repo show-status
-.PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host sync-time update-system
+.PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host update-system
 .PHONY: refresh-dotfiles restore-dotfiles
 .PHONY: confirm-ssh configure-ssh rollback-ssh
-.PHONY: apply-stack build-caddy configure-services configure-tailscale configure-wireguard login-vpn pull-stack show-logs verify-images deploy-key
-.PHONY: down lock-images recreate restart show-containers up
+.PHONY: build-caddy configure-vpn vpn-login lock-tailscale verify-tailscale deploy-tailscale deploy-key
 .PHONY: deploy-stack preview-deploy sync-repo
 .PHONY: attach-vm create-vm list-vm start-vm stop-vm teardown-vm
 
@@ -34,7 +33,6 @@ help:
 	  '  restore-dotfiles    Restore a dotfiles backup (backup=/path)' \
 	  '  install-packages    Install Ubuntu host packages from config/apt/packages.txt' \
 	  '  setup-host          Synchronize time, install the host, selected Caddy role, and show status' \
-	  '  sync-time           Synchronize the Ubuntu clock before package work' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
 	  '' \
@@ -42,26 +40,17 @@ help:
 	  '  build-caddy         Rebuild the native Caddy binary with Cloudflare DNS' \
 	  '' \
 	  'VPN:' \
-	  '  configure-services  Apply the saved VPN settings' \
-	  '  configure-tailscale Configure only Tailscale' \
-	  '  configure-wireguard Configure only WireGuard' \
-	  '  login-vpn           Log in to Tailscale or show the WireGuard profile' \
+	  '  configure-vpn       Save and apply the Tailscale or WireGuard choice' \
+	  '  vpn-login           Log in to Tailscale or show the WireGuard profile' \
 	  '' \
-	  'Compose:' \
-	  '  apply-stack         Apply STACK=tailscale on this host' \
-	  '  down                Stop containers in the combined Compose project' \
-	  '  lock-images         Update the lock for images in all included Compose files' \
-	  '  pull-stack          Pull STACK=tailscale' \
-	  '  recreate            Rebuild and recreate configured services' \
-	  '  restart             Restart configured services' \
-	  '  show-containers     List containers in the combined Compose project' \
-	  '  show-logs           Follow logs for STACK=tailscale' \
+	  'Tailscale stack:' \
+	  '  deploy-tailscale    Apply the pinned Tailscale stack locally or to HOST' \
+	  '  lock-tailscale      Update the Tailscale image lock' \
+	  '  verify-tailscale    Check the Tailscale image lock' \
 	  '  deploy-key          Create a deploy key for REPO=example' \
-	  '  up                  Start configured services and build local images' \
-	  '  verify-images       Check the combined image lock' \
 	  '' \
 	  'Deployment:' \
-	  '  deploy-stack        Check, preview, sync, and apply (HOST=... STACK=...)' \
+	  '  deploy-stack        Check, preview, sync, and apply Tailscale (HOST=...)' \
 	  '  preview-deploy      Show rsync differences (HOST=...)' \
 	  '  sync-repo           Copy the repo with rsync (HOST=...)' \
 	  '' \
@@ -74,7 +63,7 @@ help:
 	  '  teardown-vm         Delete the selected VM and its disk'
 
 setup-host:
-	@$(MAKE) --no-print-directory sync-time
+	@bash scripts/root.sh scripts/os/sync-time.sh
 	@$(MAKE) --no-print-directory install-packages
 	@bash scripts/root.sh scripts/caddy/setup.sh
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status
@@ -120,60 +109,30 @@ update-system:
 install-packages:
 	@bash scripts/root.sh scripts/os/install-packages.sh
 
-sync-time:
-	@bash scripts/root.sh scripts/os/sync-time.sh
-
 build-caddy:
 	@bash scripts/root.sh scripts/caddy/build.sh
 
-lock-images:
+lock-tailscale:
 	@bash scripts/compose/lock-images.sh lock
 	@bash scripts/compose/lock-images.sh verify
 
-verify-images:
+verify-tailscale:
 	@bash scripts/compose/lock-images.sh verify
 
-up:
-	@bash scripts/compose/manage-compose.sh up
-
-down:
-	@bash scripts/compose/manage-compose.sh down
-
-restart:
-	@bash scripts/compose/manage-compose.sh restart
-
-recreate:
-	@bash scripts/compose/manage-compose.sh recreate
-
-show-containers:
-	@bash scripts/compose/manage-compose.sh ps
-
-configure-services:
+configure-vpn:
 	@bash scripts/root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
 
-configure-tailscale:
-	@bash scripts/root.sh scripts/compose/configure-services.sh configure --vpn=tailscale --vpn-only
+deploy-tailscale:
+	@STACK=tailscale bash scripts/compose/deploy-tailscale.sh
 
-configure-wireguard:
-	@bash scripts/root.sh scripts/compose/configure-services.sh configure --vpn=wireguard --vpn-only
-
-apply-stack:
-	@bash scripts/compose/apply-stack.sh
-
-login-vpn:
+vpn-login:
 	@bash scripts/compose/configure-services.sh vpn-login
-
-pull-stack:
-	@bash scripts/compose/configure-services.sh pull "$$STACK"
-
-show-logs:
-	@bash scripts/compose/configure-services.sh logs "$$STACK"
 
 deploy-key:
 	@REPO='$(REPO)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/deploy-key.sh
 
 deploy-stack:
-	@bash scripts/deploy/deploy-stack.sh
+	@STACK=tailscale bash scripts/deploy/deploy-stack.sh
 
 preview-deploy:
 	@bash scripts/deploy/sync-repo.sh plan

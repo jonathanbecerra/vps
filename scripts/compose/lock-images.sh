@@ -4,7 +4,11 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 action=${1:-lock}
 case "$action" in lock | verify) ;; *) die 'Use lock-images.sh lock|verify.' ;; esac
 [[ -z ${STACK:-} ]] || die 'Image locks cover every included service; run without STACK.'
-preview_if_requested "${action}-images" "$@"
+if [[ $action == lock ]]; then
+  preview_if_requested lock-tailscale "$@"
+else
+  preview_if_requested verify-tailscale "$@"
+fi
 find_compose
 begin "$action container image lock"
 temporary=$(mktemp -d "$ROOT/.image-lock.XXXXXX")
@@ -24,10 +28,10 @@ if [[ $action == lock ]]; then
   mv "$locked" "$lock"
   note 'Updated stacks/compose.lock.yaml.'
 else
-  [[ -f $lock ]] || die 'Missing stacks/compose.lock.yaml. Run make lock-images.'
+  [[ -f $lock ]] || die 'Missing stacks/compose.lock.yaml. Run make lock-tailscale.'
   if ! cmp -s "$lock" "$locked"; then
     diff -u "$lock" "$locked" || true
-    die 'The image lock changed. Review it, then run make lock-images.'
+    die 'The image lock changed. Review it, then run make lock-tailscale.'
   fi
   note 'Image lock matches.'
   "${COMPOSE[@]}" --env-file "$ROOT/.env.example" -f "$ROOT/stacks/compose.yaml" \

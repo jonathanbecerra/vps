@@ -19,4 +19,4 @@ options=(-acz --delete-after --itemize-changes --filter="merge $ROOT/.rsyncignor
 [[ $action != plan ]] || options+=(--dry-run)
 step 'Compare the target and local files'
 rsync "${options[@]}" -e 'ssh -o BatchMode=yes -o StrictHostKeyChecking=yes' "$ROOT/" "$target:/opt/vps/"
-if [[ $action == sync ]]; then note 'Synced. Run make apply-stack HOST=... STACK=... to apply a stack.'; fi
+if [[ $action == sync ]]; then note 'Synced. Run make deploy-tailscale HOST=... to apply Tailscale.'; fi

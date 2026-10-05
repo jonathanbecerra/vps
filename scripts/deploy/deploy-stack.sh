@@ -14,4 +14,4 @@ make preview-deploy
 step 'Sync files'
 make sync-repo
 step 'Apply the stack'
-make apply-stack
+make deploy-tailscale

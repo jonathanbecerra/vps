@@ -125,42 +125,7 @@ preview_stack() {
       run "${compose[@]}" up -d --no-build --wait --wait-timeout 90 "$stack"
       run "${compose[@]}" ps
       ;;
-    pull)
-      preview_image_locks verify
-      run "${compose[@]}" pull "$stack"
-      ;;
-    logs) run "${compose[@]}" logs --tail 100 --follow ;;
     vpn-login) run "${compose[@]}" exec tailscale tailscale up --accept-dns=false ;;
-  esac
-}
-
-preview_compose() {
-  local action=$1
-  local -a profiles=()
-  note "Use the saved service choices: Caddy=$CADDY_MODE, VPN=$VPN."
-  [[ $VPN != tailscale ]] || profiles+=(--profile tailscale)
-  compose=(docker compose --env-file /opt/vps/.env.example
-    --env-file /opt/vps/.local/tailscale.env
-    -f /opt/vps/stacks/compose.yaml -f /opt/vps/stacks/compose.lock.yaml)
-  run "${compose[@]}" "${profiles[@]}" config --services
-  case "$action" in
-    up)
-      preview_image_locks verify
-      run "${compose[@]}" "${profiles[@]}" up -d --build
-      ;;
-    down)
-      run "${compose[@]}" --profile tailscale down
-      preview_legacy_compose tailscale
-      ;;
-    restart) run "${compose[@]}" "${profiles[@]}" restart ;;
-    recreate)
-      preview_image_locks verify
-      run "${compose[@]}" "${profiles[@]}" up -d --build --force-recreate --remove-orphans
-      ;;
-    ps)
-      step 'Containers in the Compose project'
-      run "${compose[@]}" --profile tailscale ps -a
-      ;;
   esac
 }
 
@@ -226,7 +191,7 @@ case "$command" in
     note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
     note "Automatic security updates=$SECURITY_UPDATES."
     note 'make setup-host synchronizes time, installs the host, and applies the selected Caddy role.'
-    note 'Run make configure-services to apply the saved service choices.'
+    note 'Run make configure-vpn to apply the saved VPN choice.'
     printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
     note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
     run hostnamectl set-hostname "$SERVER_HOSTNAME"
@@ -305,13 +270,8 @@ case "$command" in
         ;;
     esac
     ;;
-  lock-images) preview_image_locks lock ;;
-  verify-images) preview_image_locks verify ;;
-  compose-up) preview_compose up ;;
-  compose-down) preview_compose down ;;
-  compose-restart) preview_compose restart ;;
-  compose-recreate) preview_compose recreate ;;
-  compose-ps) preview_compose ps ;;
+  lock-tailscale) preview_image_locks lock ;;
+  verify-tailscale) preview_image_locks verify ;;
   configure-security) preview_security ;;
   install-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/install.sh" "$@" ;;
   stow-dotfiles) exec bash "${DOTFILES_DIR:-$ROOT/dotfiles}/scripts/stow.sh" "$@" ;;
@@ -339,7 +299,7 @@ case "$command" in
       *) die 'Choose harden or confirm.' ;;
     esac
     ;;
-  configure-services)
+  configure-vpn)
     action=${1:-configure}
     shift || true
     stack=${STACK:-}
@@ -348,7 +308,7 @@ case "$command" in
         case $1 in
           --vpn-only) ;;
           --vpn=*) VPN=${1#*=} ;;
-          *) die 'Usage: configure-services.sh configure [--vpn=NAME] [--vpn-only]' ;;
+          *) die 'Usage: make configure-vpn vpn=NAME' ;;
         esac
         shift
       done
@@ -382,7 +342,7 @@ case "$command" in
       preview_stack
     fi
     ;;
-  deploy-stack | sync-repo | apply-stack)
+  deploy-stack | sync-repo | deploy-tailscale)
     if [[ $command == deploy-stack ]]; then
       [[ ${HOST:-} =~ ^([a-z_][a-z0-9_-]*@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die 'Set HOST to your SSH alias or user@hostname.'
       case "${STACK:-}" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac
@@ -390,10 +350,10 @@ case "$command" in
       make check-repo
       make preview-deploy
       make sync-repo
-      make apply-stack
+      make deploy-tailscale
       exit 0
     fi
-    if [[ $command == apply-stack ]]; then
+    if [[ $command == deploy-tailscale ]]; then
       action=apply
       stack=${STACK:-}
       case "$stack" in tailscale) ;; *) die 'Set STACK=tailscale.' ;; esac

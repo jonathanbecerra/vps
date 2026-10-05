@@ -6,8 +6,8 @@ require_root
 detect_os
 load_config "$VPS_HOST_CONFIG"
 validate_config
-[[ $VPN == wireguard ]] || die 'Choose WireGuard with make configure-services first.'
-[[ -n $WG_ENDPOINT ]] || die 'Set a public endpoint with make configure-services vpn=wireguard first.'
+[[ $VPN == wireguard ]] || die 'Choose WireGuard with make configure-vpn vpn=wireguard first.'
+[[ -n $WG_ENDPOINT ]] || die 'Set a public endpoint with make configure-vpn vpn=wireguard first.'
 [[ $ROOT == /opt/vps ]] || die 'Run this from /opt/vps.'
 
 begin 'Set up WireGuard'

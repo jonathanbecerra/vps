@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
-preview_if_requested configure-services "$@"
-[[ $(uname -s) == Linux ]] || die 'Run service commands on the Linux host, or use make apply-stack HOST=... STACK=tailscale'
+preview_if_requested configure-vpn "$@"
+[[ $(uname -s) == Linux ]] || die 'Run VPN commands on the Linux host, or use make deploy-tailscale HOST=...'
 load_config "$VPS_HOST_CONFIG"
 action=${1:-configure}
 stack=${2:-}
@@ -12,7 +12,7 @@ if [[ $action == configure ]]; then
     case $1 in
       --vpn-only) ;;
       --vpn=*) VPN=${1#*=} ;;
-      *) die 'Usage: configure-services.sh configure [--vpn=NAME] [--vpn-only]' ;;
+      *) die 'Usage: make configure-vpn vpn=NAME' ;;
     esac
     shift
   done
@@ -21,9 +21,9 @@ validate_config
 
 check_stack() {
   [[ $stack == tailscale ]] || die 'Choose STACK=tailscale.'
-  [[ $VPN == tailscale ]] || die "VPN is set to $VPN. Run make configure-services to change it."
-  [[ -f $ROOT/.local/tailscale.env ]] || die 'Run make configure-services on the host first.'
-  [[ -f $ROOT/stacks/compose.lock.yaml ]] || die 'Run make lock-images first.'
+  [[ $VPN == tailscale ]] || die "VPN is set to $VPN. Run make configure-vpn vpn=tailscale to change it."
+  [[ -f $ROOT/.local/tailscale.env ]] || die 'Run make configure-vpn vpn=tailscale on the host first.'
+  [[ -f $ROOT/stacks/compose.lock.yaml ]] || die 'Run make lock-tailscale first.'
 }
 
 apply_tailscale() {
@@ -41,17 +41,6 @@ case "$action" in
     apply_tailscale
     exit 0
     ;;
-  pull)
-    check_stack
-    progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/compose/lock-images.sh" verify
-    progress 'Pull Tailscale image' compose --profile tailscale pull tailscale
-    exit 0
-    ;;
-  logs)
-    check_stack
-    compose --profile tailscale logs --tail 100 --follow tailscale
-    exit 0
-    ;;
   vpn-login)
     if [[ $VPN == wireguard ]]; then
       [[ -s $ROOT/.local/wireguard-client.conf ]] || die 'Configure WireGuard first.'
@@ -64,7 +53,7 @@ case "$action" in
     exit 0
     ;;
   configure) ;;
-  *) die 'Usage: configure-services.sh configure|apply|pull|logs|vpn-login [STACK]' ;;
+  *) die 'Usage: configure-services.sh configure|apply|vpn-login [STACK]' ;;
 esac
 
 require_root

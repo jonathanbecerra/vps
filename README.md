@@ -183,7 +183,9 @@ make install-dotfiles
 
 `make setup-host` synchronizes the clock, installs the host packages and
 security controls, applies the selected Caddy role, and shows the final status.
-You do not need to run `make sync-time` separately.
+The Linux dotfiles installer also checks time synchronization before it uses
+the package manager. There is no separate time-sync command in the public
+Makefile.
 
 ### Caddy
 
@@ -329,25 +331,33 @@ It does not change host users, SSH, firewalls, Docker, or services. See
 [dotfiles/README.md](dotfiles/README.md) for refresh, restore, and Homebrew
 cleanup.
 
-## 6. Add services when you need them
+## 6. Run applications
 
-The box is secure and useful before any application is deployed. Add a service
-under `stacks/<name>/`, include its Compose file in `stacks/compose.yaml`,
-then lock and start the images:
+Application projects live under `/var/app/<project>`. Static sites live under
+`/var/www/<domain>`. Each Docker project owns its Compose file and runs from
+its own directory. The dotfiles install adds short Docker commands and
+`lazydocker` is available for interactive management:
 
 ```sh
-make lock-images
-make up
-make show-containers
+cd /var/app/<project>
+dcup
+dcps
+dlogs <container>
+dcdown
 ```
 
-Keep app ports behind Caddy and bind any required host port to `127.0.0.1`.
-`make show-status` flags published ports exposed on other addresses. Docker
-forwarding is denied by UFW, and UniFi remains responsible for traffic between
-the network zones.
+Use `dcrs` to restart a Compose project. Use `dstall` to stop every running
+container on the host. `dts <container>` removes one container, its image when
+unused, and its unused named volumes while preserving Docker networks. `dtd`
+is the confirmed global teardown and removes all unused Docker data, including
+networks and volumes. Keep app ports behind Caddy and bind any host port to
+`127.0.0.1`.
 
-Point each hostname at the VPS. Keep application ports bound to loopback so
-only Caddy exposes them publicly.
+`make show-status` reports published ports that listen outside loopback. UFW
+and UniFi remain responsible for the host and network-zone boundaries.
+
+Point each hostname at the VPS. Caddy exposes the site or reverse proxy, while
+the application remains on its local Docker network or loopback port.
 
 For a repository that the host should clone, create a repository-scoped GitHub
 deploy key instead of giving the host a personal GitHub key:

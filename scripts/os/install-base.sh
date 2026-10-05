@@ -85,7 +85,7 @@ printf '  %-18s %s\n' 'VPN' "$VPN"
 printf '  %-18s %s\n' 'Security updates' "$SECURITY_UPDATES"
 printf '  %-18s %s\n' 'Public key' "$key_file"
 printf '  Ubuntu, Docker, UFW, and fail2ban will be set up.\n'
-printf '  make setup-host applies the selected Caddy role; make configure-services applies VPN choices.\n'
+printf '  make setup-host applies the selected Caddy role; make configure-vpn applies VPN choices.\n'
 printf '  Caddy role: /etc/caddy/caddy.conf; Cloudflare token: /etc/caddy/caddy.env.\n'
 confirm 'Set up this box?'
 export VPS_NO_CLEAR=1

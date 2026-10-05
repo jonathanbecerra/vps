@@ -390,7 +390,7 @@ ensure_time_sync() {
     fi
     sleep 2
   done
-  die "Ubuntu time is not synchronized. Check $service and run make sync-time."
+  die "Ubuntu time is not synchronized. Check $service and rerun make setup-host."
 }
 
 apt_update() {
