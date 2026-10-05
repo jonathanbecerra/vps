@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Local fixtures only: no package installs, downloads, or host configuration.
+export NO_COLOR=1
 # shellcheck source=scripts/lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 temporary=$(mktemp -d)
@@ -45,6 +46,9 @@ y'
 grep -qF '[y/N]' "$temporary/prompts" || die 'Confirmation does not show its safe default.'
 phase 3 4 Dotfiles >"$temporary/phase"
 grep -q '3/4  Dotfiles' "$temporary/phase" || die 'Phase heading lost its position or label.'
+phase 4 4 'Setup complete' complete >"$temporary/phase"
+grep -q '● ● ● ●  4/4  Setup complete' "$temporary/phase" || die 'Completion did not finish every phase.'
+if grep -q '[◉○]' "$temporary/phase"; then die 'Completion still shows an unfinished phase.'; fi
 
 # Replace only machine paths. The real bootstrap function and its redirection run.
 mkdir -p "$temporary/bin" "$temporary/installed"

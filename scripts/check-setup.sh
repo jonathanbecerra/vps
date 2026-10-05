@@ -51,6 +51,12 @@ release_setup_lock() { :; }
 write_caddy_config() { printf 'caddy-mode=%s\n' "$CADDY_MODE" >>"$ROOT/trace"; }
 hostname() { printf 'fixture-host\n'; }
 usermod() { printf 'shell\n' >>"$ROOT/trace"; }
+fixture_sshd() {
+  [[ ${FIXTURE_POLICY_ERROR:-0} == 0 ]] || return 1
+  printf '%s\n' "$*" >"$ROOT/policy-args"
+  printf 'passwordauthentication %s\nauthenticationmethods %s\n' "${FIXTURE_PASSWORD_AUTH:-yes}" "${FIXTURE_AUTH_METHODS:-any}"
+  printf 'pubkeyauthentication %s\n' "${FIXTURE_PUBKEY_AUTH:-yes}"
+}
 ask() {
   local reply
   read -r reply
@@ -83,11 +89,12 @@ fi
 FIXTURE
 done
 sed -e "s|/dev/tty|$flow/answers|g" \
+  -e 's|/usr/sbin/sshd|fixture_sshd|g' \
   -e "s|/var/lib/vps-setup|$flow/state|g" "$ROOT/setup-vps.sh" >"$flow/setup-vps.sh"
 run_flow() {
   printf '%s\n' "$@" >"$flow/answers"
   : >"$flow/trace"
-  env SUDO_USER=admin bash "$flow/setup-vps.sh" </dev/null >"$flow/output" 2>&1
+  env SUDO_USER=admin SSH_CONNECTION="${FIXTURE_CONNECTION:-}" bash "$flow/setup-vps.sh" </dev/null >"$flow/output" 2>&1
 }
 run_flow 1 y
 grep -q 'Setup complete' "$flow/output" || die 'Basic did not finish.'
@@ -95,20 +102,56 @@ grep -q 'Unchanged' "$flow/output" || die 'Basic misreported SSH hardening.'
 if grep -qx ssh "$flow/trace"; then die 'Basic entered the SSH handoff.'; fi
 if grep -q fixture-health-details "$flow/output"; then die 'Routine health output was not hidden.'; fi
 grep -qx 'ADMIN_USER=admin' "$flow/host.conf" || die 'Basic did not save the account for a later run.'
+grep -q '● ● ● ●  4/4  Setup complete' "$flow/output" || die 'Basic left its progress unfinished.'
+grep -q 'Log out and log back in to activate Zsh and Docker group access.' "$flow/output" || die 'Completion omitted the required fresh login.'
+grep -q 'log in again as admin' "$flow/output" || die 'Console login omitted the selected account.'
+grep -qF 'ssh -p PORT admin@HOST' "$flow/output" || die 'Basic omitted its login command.'
+grep -qF 'ssh-copy-id -i ~/.ssh/id_ed25519.pub -p PORT admin@HOST' "$flow/output" || die 'Basic omitted optional key setup.'
+grep -q 'Copying a key does not disable password or root SSH login.' "$flow/output" || die 'Basic confused copying a key with hardening.'
+grep -q 'forwarded port shown by make list-vm' "$flow/output" || die 'Completion omitted the VM port reminder.'
+if grep -Eq 'Status:|Rerun:' "$flow/output"; then die 'Completion still shows maintenance commands.'; fi
+
+FIXTURE_PASSWORD_AUTH=no run_flow 1 y
+grep -q 'Use your existing SSH authentication' "$flow/output" || die 'Basic ignored disabled password login.'
+if grep -Eq 'account password when prompted|ssh-copy-id' "$flow/output"; then die 'Basic offered password login when disabled.'; fi
+FIXTURE_AUTH_METHODS=publickey,password run_flow 1 y
+if grep -Eq 'account password when prompted|ssh-copy-id' "$flow/output"; then die 'Basic treated multi-factor SSH as password-only access.'; fi
+FIXTURE_AUTH_METHODS=password run_flow 1 y
+grep -q 'account password when prompted' "$flow/output" || die 'Basic missed an explicit password method.'
+if grep -q ssh-copy-id "$flow/output"; then die 'Basic offered key login when only passwords are allowed.'; fi
+FIXTURE_AUTH_METHODS='publickey password' run_flow 1 y
+grep -q ssh-copy-id "$flow/output" || die 'Basic missed separate password and key login methods.'
+FIXTURE_PUBKEY_AUTH=no run_flow 1 y
+if grep -q ssh-copy-id "$flow/output"; then die 'Basic offered key login when public-key authentication is disabled.'; fi
+FIXTURE_POLICY_ERROR=1 run_flow 1 y
+grep -q 'Could not check SSH authentication' "$flow/output" || die 'Completion hid a policy lookup failure.'
+if grep -Eq 'account password when prompted|ssh-copy-id' "$flow/output"; then die 'Basic offered password login without a policy check.'; fi
+FIXTURE_CONNECTION='192.0.2.10 50000 192.0.2.20 22' run_flow 1 y
+grep -q 'Open a fresh SSH connection' "$flow/output" || die 'SSH completion showed console-only instructions.'
+grep -q 'Keep this session open until the new login works' "$flow/output" || die 'Completion told the user to close their only working SSH session.'
+grep -qF 'user=admin,addr=192.0.2.10,laddr=192.0.2.20,lport=22' "$flow/policy-args" || die 'Password instructions ignored the current connection context.'
+if grep -q 'admin@192.0.2.20' "$flow/output"; then die 'Completion assumed the guest address was reachable from the Mac.'; fi
+
 run_flow 2 '' '' y 1 2 1
 grep -q 'admin@fixture-host' "$flow/output" || die 'Advanced did not reuse the Basic account and hostname.'
 grep -q 'Confirmed / keys only' "$flow/output" || die 'Advanced lost the SSH result.'
 grep -qx 'caddy-mode=private' "$flow/trace" || die 'Advanced lost the Caddy choice.'
 grep -qx install-dotfiles.sh "$flow/trace" || die 'Advanced skipped dotfiles.'
+grep -q '● ● ● ● ●  5/5  Setup complete' "$flow/output" || die 'Advanced left its progress unfinished.'
+grep -qF 'ssh -i ~/.ssh/id_ed25519 -p PORT admin@HOST' "$flow/output" || die 'Advanced omitted key login instructions.'
+if grep -Eq 'account password when prompted|ssh-copy-id' "$flow/output"; then die 'Confirmed SSH suggested password access.'; fi
 run_flow 2 '' '' yes 2
 if grep -Eq '^(setup.sh|configure.sh|install-dotfiles.sh|shell|show-status.sh)$' "$flow/trace"; then
   die 'Advanced started services or dotfiles after Stop.'
 fi
 FIXTURE_SSH_RESULT='Not confirmed / rolled back' run_flow 2 '' '' yes 1 1 1
 grep -q 'SSH hardening was not confirmed' "$flow/output" || die 'Completion hid unconfirmed SSH.'
+if grep -q 'Reconnect with the key you verified' "$flow/output"; then die 'Rollback claimed a verified key login.'; fi
 if FIXTURE_HEALTH_STATUS=7 run_flow 1 yes; then
   die 'A failed health check passed setup.'
 fi
 grep -q fixture-health-details "$flow/output" || die 'Setup hid a failed health check.'
 if grep -q 'Setup complete' "$flow/output"; then die 'Setup claimed success after a failure.'; fi
+run_flow 2 '' deploy y 1 1 1
+grep -qF 'ssh -i ~/.ssh/id_ed25519 -p PORT deploy@HOST' "$flow/output" || die 'Login instructions hard-coded the admin username.'
 printf 'SSH receipt/key guards, guided flow fixtures, and setup/VPN previews passed.\n'

@@ -49,10 +49,10 @@ panel() {
 }
 
 phase() {
-  local current=$1 total=$2 label=$3 index
+  local current=$1 total=$2 label=$3 state=${4:-active} index
   printf '\n  '
   for ((index = 1; index <= total; index++)); do
-    if ((index < current)); then
+    if [[ $state == complete ]] || ((index < current)); then
       printf '%s●%s ' "$C_GREEN" "$C_RESET"
     elif ((index == current)); then
       printf '%s◉%s ' "$C_CYAN" "$C_RESET"

@@ -42,6 +42,12 @@ If the code is already on the box, run that last command there.
 If SSH is unavailable, start from the console. A downloaded script cannot
 fix access until you can run it on the box.
 
+When setup finishes, log out and log back in to activate Zsh and Docker group
+access. The final screen shows login commands for the selected account.
+When connected over SSH, test a fresh connection before closing the old one.
+For a VM, use its Mac-side forwarded port, not the guest's SSH port.
+Copying an SSH key alone does not disable password or root SSH login.
+
 ### Choose a setup
 
 | Step | Basic | Advanced |

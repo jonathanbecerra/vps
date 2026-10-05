@@ -116,7 +116,7 @@ bash "$ROOT/scripts/os/install-dotfiles.sh"
 usermod -s "$(command -v zsh)" "$ADMIN_USER"
 if [[ $mode == basic ]]; then phase 4 4 'Health check'; else phase 5 5 'Health check'; fi
 progress 'Check services, firewall, and listening ports' bash "$ROOT/scripts/os/show-status.sh"
-panel 'Setup complete'
+if [[ $mode == basic ]]; then phase 4 4 'Setup complete' complete; else phase 5 5 'Setup complete' complete; fi
 field Account "$ADMIN_USER@$SERVER_HOSTNAME"
 field SSH "$ssh_result"
 field Caddy "$CADDY_MODE"
@@ -124,10 +124,40 @@ field VPN "$VPN"
 field Checkout /opt/vps
 field Elapsed "$(((SECONDS - setup_started) / 60))m $(((SECONDS - setup_started) % 60))s"
 if [[ $ssh_result == Unchanged ]]; then
-  printf '%s  SSH authentication was left unchanged; Basic does not harden SSH.%s\n' "$C_YELLOW" "$C_RESET"
+  printf '%sSSH authentication was left unchanged; Basic does not harden SSH.%s\n' "$C_YELLOW" "$C_RESET"
 elif [[ $ssh_result != Confirmed* ]]; then
-  printf '%s  SSH hardening was not confirmed. Review access before exposing this host.%s\n' "$C_RED" "$C_RESET"
+  printf '%sSSH hardening was not confirmed. Review access before exposing this host.%s\n' "$C_RED" "$C_RESET"
 fi
-printf '\n  Log in again to load Zsh and the Docker group.\n'
-printf '\tStatus: cd /opt/vps && make show-status\n\tRerun: sudo /opt/vps/setup-vps.sh\n'
+if [[ -n ${SSH_CONNECTION:-} ]]; then
+  printf '\n%sOpen a fresh SSH connection to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
+  printf 'Keep this session open until the new login works, then close it with exit.\n'
+else
+  printf '\n%sLog out and log back in to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
+  printf 'On this console, run exit and log in again as %s.\n' "$ADMIN_USER"
+fi
+printf '\nFrom your Mac, replace HOST and PORT with the reachable address and SSH port.\n'
+printf 'For a VM, use 127.0.0.1 and the forwarded port shown by make list-vm.\n'
+if [[ $ssh_result == Confirmed* ]]; then
+  printf 'Reconnect with the key you verified; replace the key path below:\n'
+  printf '\tssh -i ~/.ssh/id_ed25519 -p PORT %s@HOST\n' "$ADMIN_USER"
+else
+  printf '\tssh -p PORT %s@HOST\n' "$ADMIN_USER"
+  read -r client_ip _ server_ip server_port <<<"${SSH_CONNECTION:-127.0.0.1 0 127.0.0.1 22}"
+  if policy=$(/usr/sbin/sshd -T -C "user=$ADMIN_USER,addr=$client_ip,laddr=$server_ip,lport=$server_port" 2>/dev/null); then
+    if grep -qx 'passwordauthentication yes' <<<"$policy" && grep -Eq '^authenticationmethods (.* )?(any|password)( |$)' <<<"$policy"; then
+      printf 'Enter your account password when prompted.\n'
+      if grep -qx 'pubkeyauthentication yes' <<<"$policy" && grep -Eq '^authenticationmethods (.* )?(any|publickey)( |$)' <<<"$policy"; then
+        printf '\nOptional: copy your SSH key, then connect with it. Use your own key path.\n'
+        printf '\tssh-copy-id -i ~/.ssh/id_ed25519.pub -p PORT %s@HOST\n' "$ADMIN_USER"
+        printf '\tssh -i ~/.ssh/id_ed25519 -p PORT %s@HOST\n' "$ADMIN_USER"
+        printf '\nCopying a key does not disable password or root SSH login.\n'
+      fi
+    else
+      printf 'Use your existing SSH authentication or log in at the console.\n'
+    fi
+  else
+    printf 'Could not check SSH authentication. Keep console access and use your existing login method.\n'
+  fi
+  printf 'Use Advanced to configure and verify key-only SSH.\n'
+fi
 [[ ! -f /var/run/reboot-required ]] || note 'Ubuntu needs a reboot. Reboot when ready.'
