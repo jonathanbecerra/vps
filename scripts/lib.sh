@@ -129,6 +129,7 @@ require_root() {
 }
 
 migrate_legacy_config() {
+  [[ ${DRY_RUN:-0} != 1 ]] || return 0
   [[ -e $VPS_CONFIG_DIR || ! -e $LEGACY_VPS_CONFIG_DIR ]] || mv "$LEGACY_VPS_CONFIG_DIR" "$VPS_CONFIG_DIR"
 }
 

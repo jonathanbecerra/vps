@@ -4,6 +4,7 @@ ca-certificates
 curl
 fail2ban
 gettext-base
+git
 gnupg
 jq
 make

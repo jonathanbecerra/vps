@@ -2,7 +2,7 @@
 export DRY_RUN HOST STACK
 DOTFILES_DIR ?= $(CURDIR)/dotfiles
 export DOTFILES_DIR
-.PHONY: help
+.PHONY: help setup
 .PHONY: check-editor check-repo show-status
 .PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host update-system
 .PHONY: refresh-dotfiles restore-dotfiles
@@ -14,7 +14,7 @@ export DOTFILES_DIR
 help:
 	@printf '%s\n' \
 	  'First boot:' \
-	  '  Run ./setup-vps.sh as root on the Ubuntu box' \
+	  '  setup               Guided basic or advanced Ubuntu setup' \
 	  '  ./setup-vps.sh --help' \
 	  '  DRY_RUN=1 make <command> previews a command without changing the host' \
 	  '' \
@@ -26,7 +26,7 @@ help:
 	  'Host tools:' \
 	  '  check-editor        Load pinned Neovim plugins in a temporary directory' \
 	  '  check-repo          Check scripts and configuration' \
-	  '  install-dotfiles    Install the optional user environment on Linux or macOS' \
+	  '  install-dotfiles    Install or update the user environment on Linux or macOS' \
 	  '  reload-zsh          Start a fresh login shell after dotfiles changes' \
 	  '  stow-dotfiles       Link portable dotfiles packages with scripts/stow.sh' \
 	  '  refresh-dotfiles    Preview a config reset; action=apply backs up the listed paths' \
@@ -61,6 +61,9 @@ help:
 	  '  attach-vm           Attach to the serial console' \
 	  '  stop-vm             Shut down the selected VM' \
 	  '  teardown-vm         Delete the selected VM and its disk'
+
+setup:
+	@bash scripts/root.sh setup-vps.sh $(if $(mode),--mode $(mode))
 
 setup-host:
 	@bash scripts/root.sh scripts/os/sync-time.sh

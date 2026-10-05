@@ -14,12 +14,14 @@ VPN='none'
 SECURITY_UPDATES='yes'
 if [[ -z ${HOST:-} && -r $VPS_HOST_CONFIG ]]; then load_config "$VPS_HOST_CONFIG"; fi
 key_file='<public-key-file>'
+mode=basic
 if [[ $command == setup-vps ]]; then
   while (($#)); do
     (($# >= 2)) || die "Missing value for $1"
     case "$1" in
       --config) [[ -z $2 ]] || load_config "$2" ;;
       --key) [[ -z $2 ]] || key_file=$2 ;;
+      --mode) mode=$2 ;;
       *) die "Unknown option: $1" ;;
     esac
     shift 2
@@ -187,38 +189,36 @@ case "$command" in
     run rm -rf -- "$VM_DIR"
     ;;
   setup-vps)
+    case $mode in basic | advanced) ;; *) die 'Choose basic or advanced.' ;; esac
+    note "Setup mode: $mode."
     read_packages "$ROOT/config/apt/packages.txt"
-    note "Setup values: hostname=$SERVER_HOSTNAME, admin=$ADMIN_USER, Caddy=$CADDY_MODE, VPN=$VPN."
-    note "Automatic security updates=$SECURITY_UPDATES."
-    note 'make setup-host synchronizes time, installs the host, and applies the selected Caddy role.'
-    note 'Run make configure-vpn to apply the saved VPN choice.'
-    printf '  Validate %s and config/apt/packages.txt; check for existing containers and firewalls.\n' "$key_file"
-    note 'One setup run sets the hostname, updates Ubuntu, creates the admin, copies the repo, installs Docker, and configures UFW, fail2ban, and security updates.'
-    run hostnamectl set-hostname "$SERVER_HOSTNAME"
     upgrade_os
     install_packages "${PACKAGES[@]}"
-    note 'Back up /etc/hosts and set its 127.0.1.1 entry. Create the admin if missing.'
-    run useradd --create-home --shell /bin/zsh "$ADMIN_USER"
-    printf '  Merge public keys into /home/%s/.ssh/authorized_keys (0600).\n' "$ADMIN_USER"
+    if [[ $mode == advanced ]]; then
+      note 'Ask for hostname and admin username, then set the password in the foreground.'
+      run hostnamectl set-hostname "$SERVER_HOSTNAME"
+      run useradd --create-home --shell /bin/bash "$ADMIN_USER"
+      run passwd "$ADMIN_USER"
+    else
+      note 'Keep the current non-root account, hostname, password, and SSH authentication.'
+    fi
+    note 'Keep the project and any Git metadata at /opt/vps; preserve the source checkout.'
     copy_config sudo/admin /etc/sudoers.d/90-vps-admin
-    run visudo -cf /etc/sudoers.d/90-vps-admin
-    note 'Prompt for a sudo password if the account has none.'
-    run usermod -s /bin/zsh "$ADMIN_USER"
-    run install -d -m 0755 /data /etc/caddy "$VPS_CONFIG_DIR" /var/lib/vps-setup
-    run install -d -m 0700 /data/backups /var/backups/vps-setup
-    note "Copy the repo to /opt/vps, owned by $ADMIN_USER. Remove the temporary home checkout after setup succeeds."
-    note 'The optional user environment installs separately with make install-dotfiles.'
     preview_docker
     preview_security
-    note 'SSH HANDOFF'
-    printf 'Keep this session open until key access is confirmed.\n'
-    printf '\n\t%s1.%s In another terminal, log in as %s with the same key:\n' "$C_YELLOW" "$C_RESET" "$ADMIN_USER"
-    printf '\t\t%scd /opt/vps && make configure-ssh%s\n' "$C_YELLOW" "$C_RESET"
-    printf '\n\t%s2.%s Open a fresh SSH connection within five minutes:\n' "$C_YELLOW" "$C_RESET"
-    printf '\t\t%scd /opt/vps && make confirm-ssh%s\n' "$C_YELLOW" "$C_RESET"
-    printf '\n\t%s3.%s Continue in that confirmed session:\n' "$C_YELLOW" "$C_RESET"
-    printf '\t\t%scd /opt/vps && make setup-host%s\n' "$C_YELLOW" "$C_RESET"
-    printf '\t\tReboot when ready.\n'
+    if [[ $mode == advanced ]]; then
+      note "Wait for a valid key in the admin authorized_keys file. Optional source: $key_file."
+      run systemd-run --unit=vps-rollback-ssh --on-active=5m --timer-property=AccuracySec=1s /usr/local/sbin/vps-rollback-ssh
+      note 'Require a fresh key login and make confirm-ssh in the new session. Show a live countdown.'
+      note 'Read the confirmation receipt for this attempt. Timeout restores SSH, then offers retry, continue without hardening, or stop.'
+      note 'After confirmation, offer continue or stop. Continuing asks for Caddy and VPN choices.'
+    else
+      note 'Caddy and VPN stay off. No SSH handoff is performed.'
+    fi
+    run install -d -m 0755 /var/www/ohmstack.net/errors /var/app/hono.ohmstack.net
+    note 'Apply the selected Caddy/VPN settings, then install dotfiles as the admin user and show status.'
+    run sudo -H -u "$ADMIN_USER" bash /opt/vps/dotfiles/scripts/install.sh
+    run usermod -s /bin/zsh "$ADMIN_USER"
     ;;
   install-docker) preview_docker ;;
   install-packages)
@@ -295,7 +295,8 @@ case "$command" in
         run systemctl reload '<ssh-or-sshd>'
         ;;
       confirm)
-        note 'Require a different SSH connection as the admin and recheck the effective SSH policy.'
+        note 'Require a fresh public-key login in the SSH journal, a different connection, and an unexpired deadline.'
+        note 'Recheck the effective policy and write a receipt for this attempt.'
         run systemctl stop vps-rollback-ssh.timer
         note 'Archive the pending SSH backup after confirmation.'
         ;;

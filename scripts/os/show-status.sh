@@ -30,9 +30,13 @@ fail2ban-client status sshd || failed=1
 note 'SSH settings in use'
 policy=$(/usr/sbin/sshd -T -C "user=$ADMIN_USER,host=$SERVER_HOSTNAME,addr=127.0.0.1")
 printf '%s\n' "$policy" | awk '$1 ~ /^(port|permitrootlogin|passwordauthentication|kbdinteractiveauthentication|pubkeyauthentication|authenticationmethods|allowusers)$/ {print}'
-for rule in 'permitrootlogin no' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication yes' 'authenticationmethods publickey' "allowusers $ADMIN_USER"; do
-  grep -qxF "$rule" <<<"$policy" || failed=1
-done
+if grep -qxF 'Include /etc/ssh/vps-setup.conf' /etc/ssh/sshd_config; then
+  for rule in 'permitrootlogin no' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication yes' 'authenticationmethods publickey' "allowusers $ADMIN_USER"; do
+    grep -qxF "$rule" <<<"$policy" || failed=1
+  done
+else
+  printf '%sSSH hardening is not configured. Current authentication settings are shown above.%s\n' "$C_YELLOW" "$C_RESET"
+fi
 if [[ -d /var/lib/vps-setup/ssh-pending ]]; then
   printf 'SSH confirmation is pending.\n'
   systemctl list-timers vps-rollback-ssh.timer --no-pager

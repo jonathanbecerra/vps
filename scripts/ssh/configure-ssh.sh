@@ -9,11 +9,16 @@ validate_config
 pending=/var/lib/vps-setup/ssh-pending
 bootstrap_password_config=/etc/ssh/sshd_config.d/00-bootstrap-password.conf
 action=${1:-}
-[[ ${SUDO_USER:-} == "$ADMIN_USER" ]] || die "Run this through sudo from $ADMIN_USER's SSH session."
-[[ -n ${SSH_CONNECTION:-} ]] || die 'Use make configure-ssh or make confirm-ssh from an SSH session.'
-read -r client_ip client_port server_ip server_port <<<"$SSH_CONNECTION"
+if [[ $action != harden || ${2:-} != --from-setup ]]; then
+  [[ ${SUDO_USER:-} == "$ADMIN_USER" ]] || die "Run this through sudo from $ADMIN_USER's SSH session."
+  [[ -n ${SSH_CONNECTION:-} ]] || die 'Use make configure-ssh or make confirm-ssh from an SSH session.'
+fi
+read -r client_ip client_port server_ip server_port <<<"${SSH_CONNECTION:-127.0.0.1 0 127.0.0.1 22}"
 [[ -n $client_ip && -n $client_port && -n $server_ip && -n $server_port ]] || die 'Invalid SSH connection information.'
 begin 'Configure SSH access'
+# Serialize hardening, confirmation, and the independent rollback service.
+exec 8>/run/vps-ssh.lock
+flock 8
 
 check_effective() {
   local user settings rule
@@ -32,27 +37,36 @@ case "$action" in
     /usr/sbin/sshd -t
     user_home=$(getent passwd "$ADMIN_USER" | cut -d: -f6)
     ssh-keygen -lf "$user_home/.ssh/authorized_keys" >/dev/null
-    confirm 'Turn off root and password SSH login? Keep this session open.'
+    [[ ${2:-} == --from-setup ]] || confirm 'Turn off root and password SSH login? Keep this session open.'
     step 'Arm the five-minute rollback'
-    install -d -m 0700 "$pending" /var/backups/vps-setup
-    cp -a /etc/ssh/sshd_config "$pending/sshd_config"
-    [[ ! -e /etc/ssh/vps-setup.conf ]] || cp -a /etc/ssh/vps-setup.conf "$pending/vps-setup.conf"
-    [[ ! -f $bootstrap_password_config ]] || cp -a "$bootstrap_password_config" "$pending/bootstrap-password.conf"
-    install -d -m 0700 "$pending/sshd-files"
-    : >"$pending/sshd-password-files"
+    install -d -m 0700 /var/lib/vps-setup /var/backups/vps-setup
+    prepared=$(mktemp -d /var/lib/vps-setup/ssh-stage.XXXXXX)
+    trap 'rm -rf -- "$prepared"; release_setup_lock' EXIT
+    cp -a /etc/ssh/sshd_config "$prepared/sshd_config"
+    [[ ! -e /etc/ssh/vps-setup.conf ]] || cp -a /etc/ssh/vps-setup.conf "$prepared/vps-setup.conf"
+    [[ ! -f $bootstrap_password_config ]] || cp -a "$bootstrap_password_config" "$prepared/bootstrap-password.conf"
+    install -d -m 0700 "$prepared/sshd-files"
+    : >"$prepared/sshd-password-files"
     while IFS= read -r file; do
       [[ -f $file ]] || continue
       relative=${file#/etc/ssh/}
-      printf '%s\n' "$file" >>"$pending/sshd-password-files"
-      install -D -m 0644 "$file" "$pending/sshd-files/$relative"
+      printf '%s\n' "$file" >>"$prepared/sshd-password-files"
+      install -D -m 0644 "$file" "$prepared/sshd-files/$relative"
     done < <(sshd_password_files)
-    ssh_service >"$pending/service"
-    printf '%s\n' "$SSH_CONNECTION" >"$pending/connection"
+    ssh_service >"$prepared/service"
+    printf '%s\n' "${SSH_CONNECTION:-console}" >"$prepared/connection"
+    printf '%s-%s\n' "$(date +%s)" "$$" >"$prepared/id"
+    date +%s >"$prepared/armed-at"
+    read -r uptime _ </proc/uptime
+    printf '%s\n' "$((${uptime%%.*} + 300))" >"$prepared/deadline"
+    cat /proc/sys/kernel/random/boot_id >"$prepared/boot-id"
     install -m 0755 "$ROOT/scripts/ssh/rollback-ssh.sh" /usr/local/sbin/vps-rollback-ssh
-    trap 'result=$?; if ((result != 0)); then /usr/local/sbin/vps-rollback-ssh || true; fi; release_setup_lock' EXIT
+    # A pending directory always contains a complete, restorable backup.
+    mv "$prepared" "$pending"
+    trap 'result=$?; flock -u 8; if ((result != 0)); then /usr/local/sbin/vps-rollback-ssh || true; fi; release_setup_lock' EXIT
     systemctl stop vps-rollback-ssh.timer vps-rollback-ssh.service 2>/dev/null || true
     systemctl reset-failed vps-rollback-ssh.service 2>/dev/null || true
-    systemd-run --unit=vps-rollback-ssh --on-active=5m --timer-property=AccuracySec=1s /usr/local/sbin/vps-rollback-ssh
+    systemd-run --unit=vps-rollback-ssh --on-active=5m --timer-property=AccuracySec=1s /usr/local/sbin/vps-rollback-ssh 8>&- 9>&-
     export ADMIN_USER
     step 'Require key-only SSH'
     render "$ROOT/config/ssh/sshd.conf" /etc/ssh/vps-setup.conf ADMIN_USER
@@ -66,22 +80,35 @@ case "$action" in
     check_effective
     progress 'Reload SSH' systemctl reload "$(cat "$pending/service")"
     note 'SSH now requires keys. Rollback runs in five minutes unless access is confirmed.'
-    printf 'Keep this session open. Start a fresh SSH connection, then run:\n'
-    printf '  cd /opt/vps && make confirm-ssh\n'
-    printf 'Do not reboot until that passes.\n'
+    if [[ ${2:-} != --from-setup ]]; then
+      printf 'Keep this session open. Start a fresh SSH connection, then run:\n'
+      printf '\tcd /opt/vps\n\tmake confirm-ssh\n'
+    fi
+    printf 'Do not reboot until SSH is confirmed.\n'
     ;;
   confirm)
     [[ -d $pending ]] || die 'No pending SSH change. It may already have rolled back.'
     [[ $(cat "$pending/connection") != "$SSH_CONNECTION" ]] || die 'Confirm from a new SSH connection. Disable SSH connection sharing for that login.'
-    exec 8>/run/vps-ssh.lock
-    flock 8
-    [[ -d $pending ]] || die 'The rollback already ran. Run make configure-ssh again.'
     step 'Check the fresh SSH connection'
     check_effective
+    if [[ -f $pending/armed-at ]]; then
+      auth_log=$(journalctl -b -t sshd -t sshd-session --since "@$(cat "$pending/armed-at")" --no-pager -o cat)
+      grep -Fq "Accepted publickey for $ADMIN_USER from $client_ip port $client_port " <<<"$auth_log" ||
+        die 'No fresh public-key login found for this connection. Open a new SSH connection with connection sharing disabled.'
+    fi
+    if [[ -f $pending/deadline ]]; then
+      read -r uptime _ </proc/uptime
+      [[ $(cat "$pending/boot-id") == "$(cat /proc/sys/kernel/random/boot_id)" && ${uptime%%.*} -lt $(cat "$pending/deadline") ]] ||
+        die 'The confirmation window expired. Return to setup and retry after rollback.'
+    fi
     step 'Cancel the rollback timer'
     systemctl stop vps-rollback-ssh.timer
+    if [[ -f $pending/id ]]; then
+      install -m 0600 "$pending/id" /var/lib/vps-setup/ssh-confirmed.new
+      mv /var/lib/vps-setup/ssh-confirmed.new /var/lib/vps-setup/ssh-confirmed
+    fi
     # If the timer already fired, its script rechecks pending after acquiring our lock.
-    mv "$pending" "/var/backups/vps-setup/ssh-confirmed-$(date +%Y%m%d-%H%M%S)"
+    mv "$pending" "/var/backups/vps-setup/ssh-confirmed-$(date +%Y%m%d-%H%M%S)-$$"
     note 'SSH confirmed. Rollback is cancelled; root and password logins are off.'
     ;;
   *) die 'Usage: configure-ssh.sh harden|confirm' ;;

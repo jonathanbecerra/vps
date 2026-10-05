@@ -42,4 +42,4 @@ service=$(cat "$pending/service")
 case "$service" in ssh | sshd) ;; *) exit 1 ;; esac
 systemctl reload "$service"
 logger -t vps-setup 'Restored the previous SSH configuration.'
-mv "$pending" "/var/backups/vps-setup/ssh-rollback-$(date +%Y%m%d-%H%M%S)"
+mv "$pending" "/var/backups/vps-setup/ssh-rollback-$(date +%Y%m%d-%H%M%S)-$$"

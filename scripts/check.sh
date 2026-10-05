@@ -11,7 +11,7 @@ for tool in bash shellcheck shfmt jq zsh; do
     exit 1
   }
 done
-files=(setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/caddy/*.sh scripts/vpn/*.sh scripts/deploy/*.sh scripts/vm/*.sh)
+files=(install.sh setup-vps.sh scripts/*.sh scripts/os/*.sh scripts/ssh/*.sh scripts/caddy/*.sh scripts/vpn/*.sh scripts/deploy/*.sh scripts/vm/*.sh)
 for file in "${files[@]}"; do bash -n "$file"; done
 shellcheck -x "${files[@]}"
 shfmt -d -i 2 -ci "${files[@]}"
@@ -42,4 +42,5 @@ if { command -v docker >/dev/null && docker compose version >/dev/null 2>&1; } |
 else
   printf 'Skipping Compose checks. Install Docker Compose to run them.\n'
 fi
+bash scripts/check-setup.sh
 printf 'Syntax, formatting, and config checks passed.\n'
