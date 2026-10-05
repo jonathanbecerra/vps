@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/lib.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/scripts/lib.sh"
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 mode='' key_file='' config_file='' next=''
 while (($#)); do
   case $1 in
@@ -10,14 +10,14 @@ while (($#)); do
       shift 2
       ;;
     --help | -h)
-      printf 'Usage: sudo ./setup-vps.sh [--mode basic|advanced] [--key PUBLIC_KEY_FILE] [--config HOST.conf]\n'
+      printf 'Usage: ./install.sh [--mode basic|advanced] [--key PUBLIC_KEY_FILE] [--config HOST.conf]\n'
       exit 0
       ;;
     *) die "Unknown option: $1" ;;
   esac
 done
 [[ -z $mode || $mode == basic || $mode == advanced ]] || die 'Choose basic or advanced.'
-preview_if_requested setup-vps --mode "${mode:-basic}" --key "$key_file" --config "$config_file"
+preview_if_requested setup --mode "${mode:-basic}" --key "$key_file" --config "$config_file"
 clear_screen
 require_root
 detect_os
@@ -79,7 +79,7 @@ else
     install_base advanced
   else
     note 'Resume the pending SSH confirmation before making other changes.'
-    [[ $ROOT == /opt/vps ]] || die 'Resume with sudo /opt/vps/setup-vps.sh --mode advanced.'
+    [[ $ROOT == /opt/vps ]] || die 'Resume with /opt/vps/install.sh --mode advanced.'
     validate_config
   fi
   phase 2 5 'Verify SSH access'
@@ -89,7 +89,7 @@ else
     stop 'Keep completed changes; leave services and dotfiles for later'
   if [[ $next == stop ]]; then
     note 'Stopped after SSH. Services and dotfiles were not changed.'
-    printf '\tRerun: sudo /opt/vps/setup-vps.sh --mode advanced\n'
+    printf '\tRerun: /opt/vps/install.sh --mode advanced\n'
     exit 0
   fi
   choose CADDY_MODE 'Caddy' "$CADDY_MODE" \

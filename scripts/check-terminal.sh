@@ -51,12 +51,17 @@ grep -q '● ● ● ●  Setup complete' "$temporary/phase" || die 'Completion 
 if grep -q '[◉○]' "$temporary/phase"; then die 'Completion still shows an unfinished phase.'; fi
 if grep -q '4/4' "$temporary/phase"; then die 'Completion still shows the stage count.'; fi
 
-# Replace only machine paths. The real bootstrap function and its redirection run.
-mkdir -p "$temporary/bin" "$temporary/installed"
+# Replace only machine paths. Exercise the entry point without host changes.
+mkdir -p "$temporary/bin" "$temporary/installed/scripts" "$temporary/local checkout/scripts"
 printf 'ID=ubuntu\n' >"$temporary/os-release"
-cat >"$temporary/setup-vps.sh" <<'FIXTURE'
+cat >"$temporary/setup.sh" <<'FIXTURE'
 #!/bin/sh
-[ "$*" = '--mode basic' ] || exit 81
+[ "$#" = 2 ] && [ "$1" = --mode ] && [ "$2" = basic ] || exit 81
+printf '%s\n' "$0" >"$BOOTSTRAP_FIXTURE/guide-path"
+if [ "${DRY_RUN:-0}" = 1 ]; then
+  printf 'Preview only.\n'
+  exit 0
+fi
 [ "${VPS_NO_CLEAR:-}" = 1 ] || exit 83
 read -r answer
 [ "$answer" = ready ] || exit 82
@@ -65,17 +70,30 @@ exit "${FIXTURE_RESULT:-0}"
 FIXTURE
 cat >"$temporary/bin/uname" <<'FIXTURE'
 #!/bin/sh
+printf 'uname\n' >>"$BOOTSTRAP_FIXTURE/trace"
 printf 'Linux\n'
 FIXTURE
 cat >"$temporary/bin/id" <<'FIXTURE'
 #!/bin/sh
-printf '0\n'
+printf 'id\n' >>"$BOOTSTRAP_FIXTURE/trace"
+printf '%s\n' "${FIXTURE_UID:-0}"
+FIXTURE
+cat >"$temporary/bin/sudo" <<'FIXTURE'
+#!/bin/sh
+[ "$1" = -p ] || exit 84
+shift 2
+[ "$1" = --preserve-env=SSH_CONNECTION ] || exit 85
+shift
+[ "${SSH_CONNECTION:-}" = '192.0.2.10 50000 192.0.2.20 22' ] || exit 86
+printf 'sudo\n' >>"$BOOTSTRAP_FIXTURE/trace"
+exec "$@"
 FIXTURE
 cat >"$temporary/bin/git" <<'FIXTURE'
 #!/bin/sh
+printf 'git %s\n' "$*" >>"$BOOTSTRAP_FIXTURE/trace"
 for destination do :; done
-mkdir -p "$destination"
-cp "$BOOTSTRAP_FIXTURE/setup-vps.sh" "$destination/setup-vps.sh"
+mkdir -p "$destination/scripts"
+cp "$BOOTSTRAP_FIXTURE/setup.sh" "$destination/scripts/setup.sh"
 FIXTURE
 cat >"$temporary/bin/mktemp" <<'FIXTURE'
 #!/bin/sh
@@ -85,25 +103,72 @@ chmod +x "$temporary/bin/"*
 sed -e "s|/etc/os-release|$temporary/os-release|g" \
   -e "s|/opt/vps|$temporary/installed|g" \
   -e "s|/dev/tty|$temporary/terminal|g" "$ROOT/install.sh" >"$temporary/install.sh"
+cp "$temporary/install.sh" "$temporary/local checkout/install.sh"
+cp "$temporary/setup.sh" "$temporary/local checkout/scripts/setup.sh"
+chmod +x "$temporary/local checkout/install.sh"
 # The mock installer consumes 'ready'. A leaked stdin consumes 'exit 93' as code
 # after setup, reproducing the silent hang without an actual blocking terminal.
 printf 'ready\nexit 93\n' >"$temporary/terminal"
+run_bootstrap() {
+  local launch=$1
+  shift
+  : >"$temporary/trace"
+  case $launch in
+    pipe)
+      cat "$temporary/install.sh" | env PATH="$temporary/bin:$PATH" BOOTSTRAP_FIXTURE="$temporary" \
+        "$shell" -s -- "$@"
+      ;;
+    local)
+      env PATH="$temporary/bin:$PATH" BOOTSTRAP_FIXTURE="$temporary" \
+        "$shell" "$temporary/local checkout/install.sh" "$@" </dev/null
+      ;;
+  esac
+}
 for shell in /bin/sh /bin/dash; do
   [[ -x $shell ]] || continue
   for existing in no yes; do
-    if [[ $existing == yes ]]; then cp "$temporary/setup-vps.sh" "$temporary/installed/setup-vps.sh"; fi
-    if ! cat "$temporary/install.sh" | env PATH="$temporary/bin:$PATH" BOOTSTRAP_FIXTURE="$temporary" \
-      "$shell" -s -- --mode basic >"$temporary/bootstrap"; then
-      die "Piped $shell did not finish cleanly (existing checkout: $existing)."
+    if [[ $existing == yes ]]; then
+      cp "$temporary/install.sh" "$temporary/installed/install.sh"
+      cp "$temporary/setup.sh" "$temporary/installed/scripts/setup.sh"
     fi
-    grep -q 'Setup finished.' "$temporary/bootstrap" || die 'Bootstrap did not run setup.'
-    if cat "$temporary/install.sh" | env PATH="$temporary/bin:$PATH" BOOTSTRAP_FIXTURE="$temporary" FIXTURE_RESULT=7 \
-      "$shell" -s -- --mode basic >"$temporary/bootstrap"; then
-      die 'Bootstrap swallowed a setup failure.'
-    else
-      [[ $? == 7 ]] || die 'Bootstrap changed the failure status.'
-    fi
+    for launch in pipe local; do
+      run_bootstrap "$launch" --mode basic >"$temporary/bootstrap" || die "$launch $shell did not finish (existing checkout: $existing)."
+      grep -q 'Setup finished.' "$temporary/bootstrap" || die 'Bootstrap did not run setup.'
+      if [[ $launch == local ]]; then
+        grep -qxF "$temporary/local checkout/scripts/setup.sh" "$temporary/guide-path" || die 'Local install used another checkout.'
+      elif [[ $existing == yes ]]; then
+        grep -qxF "$temporary/installed/scripts/setup.sh" "$temporary/guide-path" || die 'Piped install ignored the installed checkout.'
+      else
+        grep -q '^git clone --quiet --branch main --recurse-submodules ' "$temporary/trace" || die 'Piped install did not download main with dotfiles.'
+      fi
+      if [[ $launch == local || $existing == yes ]] && grep -q '^git ' "$temporary/trace"; then
+        die 'Bootstrap downloaded an unnecessary checkout.'
+      fi
+      if FIXTURE_RESULT=7 run_bootstrap "$launch" --mode basic >"$temporary/bootstrap"; then
+        die 'Bootstrap swallowed a setup failure.'
+      else
+        [[ $? == 7 ]] || die 'Bootstrap changed the failure status.'
+      fi
+      if compgen -G "$temporary/download.*" >/dev/null; then die 'Bootstrap left its temporary download behind.'; fi
+    done
   done
-  rm -f "$temporary/installed/setup-vps.sh"
+  FIXTURE_UID=1000 SSH_CONNECTION='192.0.2.10 50000 192.0.2.20 22' run_bootstrap local --mode basic >"$temporary/bootstrap"
+  grep -qx sudo "$temporary/trace" || die 'Local install did not request sudo for a regular user.'
+  # Help and dry runs need neither a terminal nor root, even on the Mac.
+  for launch in pipe local; do
+    run_bootstrap "$launch" --help >"$temporary/bootstrap"
+    grep -qF 'Usage: ./install.sh' "$temporary/bootstrap" || die 'Install help is missing.'
+    [[ ! -s $temporary/trace ]] || die 'Help performed host operations.'
+    DRY_RUN=1 run_bootstrap "$launch" --mode basic >"$temporary/bootstrap"
+    grep -q 'Preview only.' "$temporary/bootstrap" || die 'Install did not forward the dry run.'
+    [[ ! -s $temporary/trace ]] || die 'Dry run performed host operations.'
+  done
+  rm -f "$temporary/installed/scripts/setup.sh"
+  if run_bootstrap pipe --mode basic >"$temporary/bootstrap" 2>&1; then die 'Bootstrap accepted an outdated installed checkout.'; fi
+  grep -q 'Update .* first' "$temporary/bootstrap" || die 'Bootstrap did not explain how to update an old checkout.'
+  [[ ! -s $temporary/trace ]] || die 'Bootstrap changed the host before rejecting an old checkout.'
+  rm -f "$temporary/installed/install.sh"
+  if DRY_RUN=1 run_bootstrap pipe --mode basic >"$temporary/bootstrap" 2>&1; then die 'Dry run downloaded a missing checkout.'; fi
+  [[ ! -s $temporary/trace ]] || die 'Dry run without a checkout performed host operations.'
 done
-printf 'Menu, progress, and piped installer checks passed.\n'
+printf 'Menu, progress, and local/piped installer checks passed.\n'

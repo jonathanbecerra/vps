@@ -15,7 +15,7 @@ help:
 	@printf '%s\n' \
 	  'First boot:' \
 	  '  setup               Guided basic or advanced Ubuntu setup' \
-	  '  ./setup-vps.sh --help' \
+	  '  ./install.sh --help' \
 	  '  DRY_RUN=1 make <command> previews a command without changing the host' \
 	  '' \
 	  'SSH setup:' \
@@ -63,7 +63,7 @@ help:
 	  '  teardown-vm         Delete the selected VM and its disk'
 
 setup:
-	@bash scripts/root.sh setup-vps.sh $(if $(mode),--mode $(mode))
+	@sh ./install.sh $(if $(mode),--mode $(mode))
 
 setup-host:
 	@bash scripts/root.sh scripts/os/sync-time.sh

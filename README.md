@@ -32,11 +32,13 @@ Or clone the project yourself:
 ```sh
 git clone --recurse-submodules https://github.com/jonathanbecerra/vps.git
 cd vps
-sudo --preserve-env=SSH_CONNECTION ./setup-vps.sh
+./install.sh
 ```
 
-If the code is already on the box, run that last command there.
-`make setup` opens the same guide when Make is installed.
+The same `install.sh` starts setup from this checkout and asks for sudo
+when needed. It does not download another copy. If `/opt/vps` is already
+installed, update and run `./install.sh` there. `make setup` calls the same
+entry point. The Basic/Advanced guide lives internally in `scripts/setup.sh`.
 If SSH is unavailable, start from the console. A downloaded script cannot
 fix access until you can run it on the box.
 
@@ -285,6 +287,9 @@ DRY_RUN=1 make setup mode=basic
 DRY_RUN=1 make setup mode=advanced
 DRY_RUN=1 make setup-host
 ```
+
+Without Make, use `./install.sh --help` or
+`DRY_RUN=1 ./install.sh --mode basic` from the checkout.
 
 Dry runs print planned steps without changing the host. They skip prompts
 and live host checks, so use a disposable VM for a full setup test.

@@ -15,7 +15,7 @@ SECURITY_UPDATES='yes'
 if [[ -z ${HOST:-} && -r $VPS_HOST_CONFIG ]]; then load_config "$VPS_HOST_CONFIG"; fi
 key_file='<public-key-file>'
 mode=basic
-if [[ $command == setup-vps ]]; then
+if [[ $command == setup ]]; then
   while (($#)); do
     (($# >= 2)) || die "Missing value for $1"
     case "$1" in
@@ -188,7 +188,7 @@ case "$command" in
     note "Stop first if $VM_NAME is running. Remove this VM's state after confirmation."
     run rm -rf -- "$VM_DIR"
     ;;
-  setup-vps)
+  setup)
     case $mode in basic | advanced) ;; *) die 'Choose basic or advanced.' ;; esac
     note "Setup mode: $mode."
     read_packages "$ROOT/config/apt/packages.txt"
@@ -411,8 +411,8 @@ case "$command" in
     ;;
   check-repo)
     note 'Check Bash syntax, ShellCheck, shfmt, zsh syntax, JSON, and Compose files.'
-    run shellcheck -x "$ROOT/setup-vps.sh" "$ROOT"/scripts/*.sh "$ROOT"/scripts/vm/*.sh
-    run shfmt -d -i 2 -ci "$ROOT/setup-vps.sh" "$ROOT"/scripts/*.sh "$ROOT"/scripts/vm/*.sh
+    run shellcheck -x "$ROOT/install.sh" "$ROOT"/scripts/*.sh "$ROOT"/scripts/vm/*.sh
+    run shfmt -d -i 2 -ci "$ROOT/install.sh" "$ROOT"/scripts/*.sh "$ROOT"/scripts/vm/*.sh
     ;;
   check-editor)
     note 'Download the pinned Neovim build and plugins into temporary XDG directories.'

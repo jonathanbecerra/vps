@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by setup-vps.sh. Interactive work stays in the foreground.
+# Sourced by scripts/setup.sh. Interactive work stays in the foreground.
 install_base() {
   local mode=$1 source_repo=$ROOT admin_group user_home authorized_keys merged_keys service
   validate_config
@@ -16,8 +16,8 @@ install_base() {
   if [[ ! -f $VPS_HOST_CONFIG ]] && command -v docker >/dev/null && docker info &>/dev/null; then
     [[ -z $(docker ps -aq) ]] || die 'This host already has containers. Review their migration before first-time provisioning.'
   fi
-  if [[ $ROOT != /opt/vps && -e /opt/vps/setup-vps.sh ]]; then
-    die 'An installation already exists. Sync or pull updates there, then run sudo /opt/vps/setup-vps.sh.'
+  if [[ $ROOT != /opt/vps && -e /opt/vps/install.sh ]]; then
+    die 'An installation already exists. Sync or pull updates there, then run /opt/vps/install.sh.'
   fi
   [[ ! -f $ROOT/.git ]] || die 'Use a regular clone or a code-only rsync, not a linked Git worktree.'
   [[ -f $ROOT/dotfiles/scripts/install.sh ]] || die 'Initialize the dotfiles submodule before setup: git submodule update --init --recursive'

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by setup-vps.sh. Only configure-ssh writes a confirmation receipt.
+# Sourced by scripts/setup.sh. Only configure-ssh writes a confirmation receipt.
 valid_public_keys() {
   [[ -f $1 ]] && ! grep -q 'PRIVATE KEY' "$1" && ssh-keygen -lf "$1" >/dev/null 2>&1
 }

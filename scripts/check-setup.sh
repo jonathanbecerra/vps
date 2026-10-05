@@ -58,13 +58,13 @@ printf 'CLOUDFLARE_API_TOKEN=$(touch %s)\n' "$temporary/token-executed" >"$token
 configure_cloudflare_token "$token_file" >"$temporary/token-output" <<<'dummy-token_123'
 [[ ! -e $temporary/token-executed ]] || die 'Setup executed token file contents.'
 
-basic=$(DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode basic)
-advanced=$(DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode advanced)
+basic=$(DRY_RUN=1 sh "$ROOT/install.sh" --mode basic)
+advanced=$(DRY_RUN=1 sh "$ROOT/install.sh" --mode advanced)
 grep -q 'Keep the current non-root account' <<<"$basic" || die 'Basic no longer preserves identity.'
 if grep -q 'passwd\|vps-rollback-ssh' <<<"$basic"; then die 'Basic changed SSH or a password.'; fi
 grep -q 'live countdown' <<<"$advanced" || die 'Advanced is missing the SSH handoff.'
 grep -q 'install dotfiles as the admin user' <<<"$advanced" || die 'Advanced is missing dotfiles.'
-if DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode invalid >/dev/null 2>&1; then die 'Accepted an invalid mode.'; fi
+if DRY_RUN=1 sh "$ROOT/install.sh" --mode invalid >/dev/null 2>&1; then die 'Accepted an invalid mode.'; fi
 STACK=tailscale DRY_RUN=1 bash "$ROOT/scripts/vpn/lock-tailscale.sh" verify >/dev/null
 vpn=$(DRY_RUN=1 bash "$ROOT/scripts/vpn/configure.sh" configure --vpn=tailscale)
 grep -q 'up -d --no-build' <<<"$vpn" || die 'VPN preview did not include starting Tailscale.'
@@ -121,11 +121,11 @@ FIXTURE
 done
 sed -e "s|/dev/tty|$flow/answers|g" \
   -e 's|/usr/sbin/sshd|fixture_sshd|g' \
-  -e "s|/var/lib/vps-setup|$flow/state|g" "$ROOT/setup-vps.sh" >"$flow/setup-vps.sh"
+  -e "s|/var/lib/vps-setup|$flow/state|g" "$ROOT/scripts/setup.sh" >"$flow/scripts/setup.sh"
 run_flow() {
   printf '%s\n' "$@" >"$flow/answers"
   : >"$flow/trace"
-  env SUDO_USER=admin SSH_CONNECTION="${FIXTURE_CONNECTION:-}" bash "$flow/setup-vps.sh" </dev/null >"$flow/output" 2>&1
+  env SUDO_USER=admin SSH_CONNECTION="${FIXTURE_CONNECTION:-}" bash "$flow/scripts/setup.sh" </dev/null >"$flow/output" 2>&1
 }
 run_flow 1 y
 grep -q 'Setup complete' "$flow/output" || die 'Basic did not finish.'
