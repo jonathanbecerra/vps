@@ -27,6 +27,37 @@ if valid_public_keys "$temporary/key"; then die 'Accepted a private key as autho
 printf 'not a key\n' >"$temporary/invalid"
 if valid_public_keys "$temporary/invalid"; then die 'Accepted an invalid key.'; fi
 
+# Dummy tokens only. Check saved values without sourcing an environment file.
+ask_secret() {
+  local answer
+  read -r answer
+  printf -v "$1" '%s' "$answer"
+}
+token_file="$temporary/caddy.env"
+: >"$token_file"
+configure_cloudflare_token "$token_file" >"$temporary/token-output" 2>&1 <<<'
+invalid value
+dummy-token_123'
+grep -qx 'CLOUDFLARE_API_TOKEN=dummy-token_123' "$token_file" || die 'Token was not saved after retrying invalid input.'
+grep -qF "Cloudflare token saved to $token_file" "$temporary/token-output" || die 'Token save omitted its location.'
+if grep -q dummy-token "$temporary/token-output"; then die 'Token appeared in setup output.'; fi
+for saved in dummy-token_123 '"dummy-token_123"' "'dummy-token_123'" '  dummy-token_123  '; do
+  printf 'CLOUDFLARE_API_TOKEN=%s\n' "$saved" >"$token_file"
+  cp "$token_file" "$temporary/saved-token"
+  configure_cloudflare_token "$token_file" </dev/null >"$temporary/token-output"
+  cmp -s "$token_file" "$temporary/saved-token" || die 'Setup replaced an existing token.'
+  if grep -q dummy-token "$temporary/token-output"; then die 'Existing token appeared in setup output.'; fi
+done
+for saved in '' '   ' '""' "''"; do
+  printf 'CLOUDFLARE_API_TOKEN=old-dummy-token\nCLOUDFLARE_API_TOKEN=%s\n' "$saved" >"$token_file"
+  configure_cloudflare_token "$token_file" >"$temporary/token-output" <<<'dummy-token_123'
+  [[ $(tail -n 1 "$token_file") == CLOUDFLARE_API_TOKEN=dummy-token_123 ]] || die 'An empty final token assignment bypassed the prompt.'
+done
+# shellcheck disable=SC2016
+printf 'CLOUDFLARE_API_TOKEN=$(touch %s)\n' "$temporary/token-executed" >"$token_file"
+configure_cloudflare_token "$token_file" >"$temporary/token-output" <<<'dummy-token_123'
+[[ ! -e $temporary/token-executed ]] || die 'Setup executed token file contents.'
+
 basic=$(DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode basic)
 advanced=$(DRY_RUN=1 bash "$ROOT/setup-vps.sh" --mode advanced)
 grep -q 'Keep the current non-root account' <<<"$basic" || die 'Basic no longer preserves identity.'

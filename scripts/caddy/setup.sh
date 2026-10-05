@@ -90,13 +90,10 @@ install -d -o root -g root -m 0755 /var/www /var/app
 if [[ ! -e /etc/caddy/caddy.env ]]; then
   install -o root -g "$caddy_user" -m 0640 /dev/null /etc/caddy/caddy.env
 fi
-if [[ $CADDY_MODE == private ]] && ! grep -Eq '^CLOUDFLARE_API_TOKEN=.+$' /etc/caddy/caddy.env; then
-  note 'Private HTTPS needs a Cloudflare token with Zone:Read and DNS:Edit for this zone.'
-  token=''
-  ask_secret token 'Cloudflare API token'
-  [[ $token =~ ^[A-Za-z0-9_-]+$ ]] || die 'Enter the Cloudflare API token on its own.'
-  printf '\nCLOUDFLARE_API_TOKEN=%s\n' "$token" >>/etc/caddy/caddy.env
-  unset token
+if [[ $CADDY_MODE == private ]]; then
+  configure_cloudflare_token /etc/caddy/caddy.env
+else
+  note 'Cloudflare token file: /etc/caddy/caddy.env. Public mode does not prompt for a token.'
 fi
 if [[ ! -f /etc/caddy/Caddyfile ]] || ! cmp -s "$ROOT/config/caddy/Caddyfile" /etc/caddy/Caddyfile; then
   [[ ! -e /etc/caddy/Caddyfile ]] || backup /etc/caddy/Caddyfile

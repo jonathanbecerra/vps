@@ -498,6 +498,25 @@ ssh_service() {
   if systemctl is-active --quiet ssh.service; then printf 'ssh\n'; else printf 'sshd\n'; fi
 }
 
+configure_cloudflare_token() {
+  local env_file=$1 token
+  local saved_token_pattern="^[[:space:]]*([A-Za-z0-9_-]+|\"[A-Za-z0-9_-]+\"|'[A-Za-z0-9_-]+')[[:space:]]*$"
+  # systemd uses the last assignment. Never source this file as shell code.
+  token=$(sed -n 's/^[[:space:]]*CLOUDFLARE_API_TOKEN=//p' "$env_file" | tail -n 1)
+  if [[ $token =~ $saved_token_pattern ]]; then
+    note "Using Cloudflare token from $env_file."
+    return
+  fi
+  note 'Private HTTPS needs a Cloudflare token with Zone:Read and DNS:Edit for this zone. Input is hidden.'
+  while :; do
+    ask_secret token 'Cloudflare API token'
+    [[ $token =~ ^[A-Za-z0-9_-]+$ ]] && break
+    printf '%sToken is empty or invalid. Paste only the token, without quotes or spaces.%s\n' "$C_YELLOW" "$C_RESET" >&2
+  done
+  printf '\nCLOUDFLARE_API_TOKEN=%s\n' "$token" >>"$env_file"
+  note "Cloudflare token saved to $env_file (loaded by caddy.service)."
+}
+
 validate_caddy() {
   # Match the service environment without sourcing a token file as shell code.
   systemd-run --quiet --wait --pipe --collect --property=User=caddy \
