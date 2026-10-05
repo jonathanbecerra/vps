@@ -18,7 +18,7 @@ cleanup_build() {
 trap cleanup_build EXIT
 
 progress 'Build the Caddy binary' --interactive docker build --progress=plain --pull --target builder \
-  --tag vps-caddy-builder:2.11.4 "$ROOT/stacks/caddy"
+  --tag vps-caddy-builder:2.11.4 "$ROOT/build/caddy"
 container=$(docker create vps-caddy-builder:2.11.4)
 progress 'Copy the Caddy binary' docker cp "$container:/usr/bin/caddy" "$temporary/caddy"
 install -m 0755 "$temporary/caddy" /usr/local/bin/caddy

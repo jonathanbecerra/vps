@@ -59,7 +59,7 @@ ensure_static_example() {
 ensure_hono_app() {
   local app_dir=/var/app/hono.ohmstack.net
   [[ -e "$app_dir/compose.yaml" ]] || {
-    cp -a "$ROOT/examples/hono/." "$app_dir/"
+    cp -a "$ROOT/build/hono/." "$app_dir/"
     chown -R "$ADMIN_USER:$admin_group" "$app_dir"
   }
 }

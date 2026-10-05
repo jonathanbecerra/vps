@@ -224,6 +224,15 @@ write_caddy_config() {
   chmod 0644 "$CADDY_CONFIG"
 }
 
+write_host_config() {
+  local key
+  install -d -m 0755 "$VPS_CONFIG_DIR"
+  for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
+    printf '%s=%s\n' "$key" "${!key}"
+  done >"$VPS_HOST_CONFIG"
+  chmod 0644 "$VPS_HOST_CONFIG"
+}
+
 load_config() {
   local file=$1 key value
   migrate_legacy_config

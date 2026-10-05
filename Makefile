@@ -47,9 +47,9 @@ help:
 	  '  deploy-tailscale    Apply the pinned Tailscale stack locally or to HOST' \
 	  '  lock-tailscale      Update the Tailscale image lock' \
 	  '  verify-tailscale    Check the Tailscale image lock' \
-	  '  deploy-key          Create a deploy key for REPO=example' \
 	  '' \
 	  'Deployment:' \
+	  '  deploy-key          Create a deploy key for REPO=example' \
 	  '  deploy-stack        Check, preview, sync, and apply Tailscale (HOST=...)' \
 	  '  preview-deploy      Show rsync differences (HOST=...)' \
 	  '  sync-repo           Copy the repo with rsync (HOST=...)' \
@@ -113,20 +113,20 @@ build-caddy:
 	@bash scripts/root.sh scripts/caddy/build.sh
 
 lock-tailscale:
-	@bash scripts/compose/lock-images.sh lock
-	@bash scripts/compose/lock-images.sh verify
+	@bash scripts/vpn/lock-tailscale.sh lock
+	@bash scripts/vpn/lock-tailscale.sh verify
 
 verify-tailscale:
-	@bash scripts/compose/lock-images.sh verify
+	@bash scripts/vpn/lock-tailscale.sh verify
 
 configure-vpn:
-	@bash scripts/root.sh scripts/compose/configure-services.sh configure $(if $(vpn),--vpn=$(vpn))
+	@bash scripts/root.sh scripts/vpn/configure.sh configure $(if $(vpn),--vpn=$(vpn))
 
 deploy-tailscale:
-	@STACK=tailscale bash scripts/compose/deploy-tailscale.sh
+	@STACK=tailscale bash scripts/vpn/deploy-tailscale.sh
 
 vpn-login:
-	@bash scripts/compose/configure-services.sh vpn-login
+	@bash scripts/vpn/configure.sh vpn-login
 
 deploy-key:
 	@REPO='$(REPO)' DEPLOY_KEY_DIR='$(DEPLOY_KEY_DIR)' bash scripts/deploy/deploy-key.sh

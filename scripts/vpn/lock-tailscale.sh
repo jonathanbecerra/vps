@@ -2,13 +2,9 @@
 # shellcheck source=scripts/lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/../lib.sh"
 action=${1:-lock}
-case "$action" in lock | verify) ;; *) die 'Use lock-images.sh lock|verify.' ;; esac
-[[ -z ${STACK:-} ]] || die 'Image locks cover every included service; run without STACK.'
-if [[ $action == lock ]]; then
-  preview_if_requested lock-tailscale "$@"
-else
-  preview_if_requested verify-tailscale "$@"
-fi
+case "$action" in lock | verify) ;; *) die 'Use lock-tailscale.sh lock|verify.' ;; esac
+[[ -z ${STACK:-} || $STACK == tailscale ]] || die 'This lock covers Tailscale.'
+preview_if_requested "${action}-tailscale" "$@"
 find_compose
 begin "$action container image lock"
 temporary=$(mktemp -d "$ROOT/.image-lock.XXXXXX")

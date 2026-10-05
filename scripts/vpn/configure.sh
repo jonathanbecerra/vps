@@ -10,7 +10,6 @@ if [[ $action == configure ]]; then
   shift
   while (($#)); do
     case $1 in
-      --vpn-only) ;;
       --vpn=*) VPN=${1#*=} ;;
       *) die 'Usage: make configure-vpn vpn=NAME' ;;
     esac
@@ -30,7 +29,7 @@ apply_tailscale() {
   check_stack
   remove_legacy_compose tailscale
   progress 'Check Tailscale compose file' compose --profile tailscale config --quiet
-  progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/compose/lock-images.sh" verify
+  progress 'Verify pinned Tailscale image' bash "$ROOT/scripts/vpn/lock-tailscale.sh" verify
   progress 'Start Tailscale' compose --profile tailscale up -d --no-build --wait --wait-timeout 90 tailscale
   step 'Check Tailscale container'
   compose --profile tailscale ps tailscale
@@ -53,7 +52,7 @@ case "$action" in
     exit 0
     ;;
   configure) ;;
-  *) die 'Usage: configure-services.sh configure|apply|vpn-login [STACK]' ;;
+  *) die 'Usage: configure.sh configure|apply|vpn-login [tailscale]' ;;
 esac
 
 require_root
@@ -86,22 +85,23 @@ if [[ $VPN == tailscale && ! -f $ROOT/.local/tailscale.env ]]; then
   printf 'VPN_HOSTNAME=%s\nTS_AUTHKEY=%s\n' "$SERVER_HOSTNAME" "$token" >"$ROOT/.local/tailscale.env"
   unset token
 fi
-for key in SERVER_HOSTNAME ADMIN_USER VPN WG_ENDPOINT SECURITY_UPDATES; do
-  printf '%s=%s\n' "$key" "${!key}"
-done >"$VPS_HOST_CONFIG"
-chmod 0644 "$VPS_HOST_CONFIG"
+write_host_config
 
 if [[ $VPN == tailscale ]]; then
   chown "$ADMIN_USER:$admin_group" "$ROOT/.local/tailscale.env"
   chmod 0600 "$ROOT/.local/tailscale.env"
   install -d -m 0700 /data/tailscale
 elif [[ $VPN == wireguard ]]; then
-  bash "$ROOT/scripts/os/install-wireguard.sh"
+  bash "$ROOT/scripts/vpn/install-wireguard.sh"
 fi
 
 if [[ $VPN == tailscale ]]; then
   stack=tailscale
   apply_tailscale
-else
+  if ! grep -Eq '^TS_AUTHKEY=.+$' "$ROOT/.local/tailscale.env"; then
+    note 'Complete Tailscale login in your browser using the URL below.'
+    compose --profile tailscale exec tailscale tailscale up --accept-dns=false
+  fi
+elif [[ $VPN == none ]]; then
   note 'No VPN selected.'
 fi

@@ -98,7 +98,7 @@ preview_image_locks() {
 
 preview_caddy_build() {
   note 'Build the native Caddy binary with the Cloudflare DNS module through the pinned builder image.'
-  run docker build --pull --target builder --tag vps-caddy-builder:2.11.4 "$ROOT/stacks/caddy"
+  run docker build --pull --target builder --tag vps-caddy-builder:2.11.4 "$ROOT/build/caddy"
   run docker create vps-caddy-builder:2.11.4
   run docker cp '<builder-container>:/usr/bin/caddy' '<temporary-directory>/caddy'
   run install -m 0755 '<temporary-directory>/caddy' /usr/local/bin/caddy
@@ -306,7 +306,6 @@ case "$command" in
     if [[ $action == configure ]]; then
       while (($#)); do
         case $1 in
-          --vpn-only) ;;
           --vpn=*) VPN=${1#*=} ;;
           *) die 'Usage: make configure-vpn vpn=NAME' ;;
         esac
@@ -318,6 +317,7 @@ case "$command" in
         note 'Check /dev/net/tun, save the auth key in /opt/vps/.local/tailscale.env, and start the pinned Tailscale image.'
         run install -d -m 0700 /data/tailscale
         stack=tailscale
+        action=apply
         preview_stack
       elif [[ $VPN == wireguard ]]; then
         WG_ENDPOINT=${WG_ENDPOINT:-203.0.113.10}
@@ -337,7 +337,7 @@ case "$command" in
     elif [[ $action == vpn-login && $VPN == wireguard ]]; then
       note 'Import /opt/vps/.local/wireguard-client.conf in the WireGuard app on the client.'
     else
-      case "$action" in apply | pull | logs | vpn-login) ;; *) die 'Unknown service action.' ;; esac
+      case "$action" in apply | vpn-login) ;; *) die 'Unknown VPN action.' ;; esac
       [[ $action != vpn-login ]] || stack=$VPN
       preview_stack
     fi
@@ -368,7 +368,7 @@ case "$command" in
     [[ ${HOST:-} =~ ^([a-z_][a-z0-9_-]*@)?[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die 'Set HOST to an SSH alias or user@hostname.'
     run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" 'test "$(id -u)" -ne 0 && test -w /opt/vps'
     if [[ $action == apply ]]; then
-      run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "bash /opt/vps/scripts/compose/configure-services.sh apply $stack"
+      run ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "bash /opt/vps/scripts/vpn/configure.sh apply $stack"
       note "On $HOST:"
       preview_stack
     else

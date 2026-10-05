@@ -1,7 +1,7 @@
 .local/
 .image-lock.*/
-examples/hono/dist/
-examples/hono/node_modules/
+build/hono/dist/
+build/hono/node_modules/
 *.pem
 *.key
 .env
