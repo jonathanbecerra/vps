@@ -110,7 +110,7 @@ ssh_handoff() {
       return 0
     fi
     printf '%sSSH IS NOT CONFIRMED. The previous SSH settings are in effect.%s\n' "$C_RED" "$C_RESET"
-    choose choice 'SSH rolled back' stop \
+    choose choice 'Recovery' stop \
       retry 'Start another five-minute handoff' \
       continue 'Continue WITHOUT confirmed SSH hardening' \
       stop 'Stop here; leave services and dotfiles unchanged'

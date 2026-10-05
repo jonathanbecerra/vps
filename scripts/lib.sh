@@ -48,6 +48,21 @@ panel() {
   printf '\n%s── %s ──%s\n' "$C_CYAN" "$1" "$C_RESET"
 }
 
+phase() {
+  local current=$1 total=$2 label=$3 index
+  printf '\n  '
+  for ((index = 1; index <= total; index++)); do
+    if ((index < current)); then
+      printf '%s●%s ' "$C_GREEN" "$C_RESET"
+    elif ((index == current)); then
+      printf '%s◉%s ' "$C_CYAN" "$C_RESET"
+    else
+      printf '○ '
+    fi
+  done
+  printf ' %s%s/%s%s  %s\n' "$C_CYAN" "$current" "$total" "$C_RESET" "$label"
+}
+
 field() { printf '  %-12s %s\n' "$1" "$2"; }
 
 # Numbered choices also accept their names. Enter keeps the highlighted default.
@@ -64,7 +79,7 @@ choose() {
     printf '  %s%d%s  %-10s %s%s\n' "$C_CYAN" "${#values[@]}" "$C_RESET" "$value" "$description" "$marker"
   done
   while :; do
-    ask selection '  Choose a number or name' "$default"
+    ask selection "  Select ${label,,}" "$default"
     for index in "${!values[@]}"; do
       if [[ $selection == "${values[index]}" || $selection == "$((index + 1))" ]]; then
         printf -v "$variable" '%s' "${values[index]}"
@@ -186,8 +201,14 @@ ask() {
 
 confirm() {
   local answer
-  ask answer "$1 Type yes" no
-  [[ $answer == yes ]] || die 'Cancelled.'
+  while :; do
+    ask answer "  $1 [y/N]" ''
+    case ${answer,,} in
+      y | yes) return 0 ;;
+      '' | n | no) die 'Cancelled.' ;;
+      *) printf '%s  Enter y or n.%s\n' "$C_YELLOW" "$C_RESET" >&2 ;;
+    esac
+  done
 }
 
 ask_secret() {

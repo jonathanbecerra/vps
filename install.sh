@@ -3,6 +3,9 @@
 set -eu
 
 install_vps() {
+  if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ "${VPS_NO_CLEAR:-0}" != 1 ]; then
+    printf '\033[H\033[2J'
+  fi
   [ "$(uname -s)" = Linux ] || {
     printf 'Run this on the Ubuntu box.\n' >&2
     exit 1
@@ -16,11 +19,11 @@ install_vps() {
   if [ "$(id -u)" -eq 0 ]; then
     elevate() { "$@"; }
   else
-    elevate() { sudo --preserve-env=SSH_CONNECTION "$@"; }
+    elevate() { sudo -p 'VPS setup needs sudo. Password for %p: ' --preserve-env=SSH_CONNECTION "$@"; }
   fi
   if [ -f /opt/vps/setup-vps.sh ]; then
     printf 'Using /opt/vps. Pull updates there before rerunning setup.\n'
-    elevate bash /opt/vps/setup-vps.sh "$@"
+    elevate env VPS_NO_CLEAR=1 bash /opt/vps/setup-vps.sh "$@"
     return
   fi
   if ! command -v git >/dev/null 2>&1; then
@@ -37,7 +40,7 @@ install_vps() {
     printf 'Download failed. A private repository needs an authenticated clone or rsync.\n' >&2
     exit 1
   }
-  elevate bash "$checkout/vps/setup-vps.sh" "$@"
+  elevate env VPS_NO_CLEAR=1 bash "$checkout/vps/setup-vps.sh" "$@"
 }
 
 # Restore the pipe after prompts finish so sh reaches EOF and exits.

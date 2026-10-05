@@ -57,10 +57,14 @@ ask() {
   printf -v "$1" '%s' "${reply:-${3:-}}"
 }
 VPS_HOST_CONFIG="$ROOT/host.conf"
+VPS_CONFIG_DIR="$ROOT"
 CADDY_CONFIG="$ROOT/caddy.conf"
 FIXTURE
 cat >"$flow/scripts/os/install-base.sh" <<'FIXTURE'
-install_base() { printf 'base=%s\n' "$1" >>"$ROOT/trace"; }
+install_base() {
+  printf 'base=%s\n' "$1" >>"$ROOT/trace"
+  write_host_config
+}
 FIXTURE
 cat >"$flow/scripts/ssh/handoff.sh" <<'FIXTURE'
 ssh_handoff() {
@@ -85,12 +89,14 @@ run_flow() {
   : >"$flow/trace"
   env SUDO_USER=admin bash "$flow/setup-vps.sh" </dev/null >"$flow/output" 2>&1
 }
-run_flow 1 yes
+run_flow 1 y
 grep -q 'Setup complete' "$flow/output" || die 'Basic did not finish.'
 grep -q 'Unchanged' "$flow/output" || die 'Basic misreported SSH hardening.'
 if grep -qx ssh "$flow/trace"; then die 'Basic entered the SSH handoff.'; fi
 if grep -q fixture-health-details "$flow/output"; then die 'Routine health output was not hidden.'; fi
-run_flow 2 '' '' yes 1 2 1
+grep -qx 'ADMIN_USER=admin' "$flow/host.conf" || die 'Basic did not save the account for a later run.'
+run_flow 2 '' '' y 1 2 1
+grep -q 'admin@fixture-host' "$flow/output" || die 'Advanced did not reuse the Basic account and hostname.'
 grep -q 'Confirmed / keys only' "$flow/output" || die 'Advanced lost the SSH result.'
 grep -qx 'caddy-mode=private' "$flow/trace" || die 'Advanced lost the Caddy choice.'
 grep -qx install-dotfiles.sh "$flow/trace" || die 'Advanced skipped dotfiles.'

@@ -18,6 +18,7 @@ while (($#)); do
 done
 [[ -z $mode || $mode == basic || $mode == advanced ]] || die 'Choose basic or advanced.'
 preview_if_requested setup-vps --mode "${mode:-basic}" --key "$key_file" --config "$config_file"
+clear_screen
 require_root
 detect_os
 [[ -t 0 ]] || exec </dev/tty
@@ -64,7 +65,7 @@ if [[ $mode == basic ]]; then
   field Services 'Caddy off / VPN off / both examples created'
   field Install 'Ubuntu updates, Docker, UFW, fail2ban, dotfiles'
   confirm 'Start basic setup?'
-  panel '1/4 / Ubuntu and host protection'
+  phase 1 4 'Ubuntu and host protection'
   install_base basic
 else
   if [[ ! -d /var/lib/vps-setup/ssh-pending ]]; then
@@ -74,16 +75,16 @@ else
     ask ADMIN_USER 'Admin username' "$ADMIN_USER"
     validate_config
     confirm "Update Ubuntu and set up $ADMIN_USER on $SERVER_HOSTNAME?"
-    panel '1/5 / Ubuntu and account'
+    phase 1 5 'Ubuntu and account'
     install_base advanced
   else
     note 'Resume the pending SSH confirmation before making other changes.'
     [[ $ROOT == /opt/vps ]] || die 'Resume with sudo /opt/vps/setup-vps.sh --mode advanced.'
     validate_config
   fi
-  panel '2/5 / Verify SSH access'
+  phase 2 5 'Verify SSH access'
   ssh_handoff
-  choose next 'SSH step finished' continue \
+  choose next 'Next step' continue \
     continue 'Set up services and install dotfiles' \
     stop 'Keep completed changes; leave services and dotfiles for later'
   if [[ $next == stop ]]; then
@@ -106,14 +107,14 @@ fi
 
 # Each installer owns its lock. Do not hold one during another-session handoff.
 export DOTFILES_DIR="$ROOT/dotfiles"
-if [[ $mode == basic ]]; then panel '2/4 / Examples'; else panel '3/5 / Services and examples'; fi
+if [[ $mode == basic ]]; then phase 2 4 'Examples'; else phase 3 5 'Services and examples'; fi
 bash "$ROOT/scripts/caddy/setup.sh"
 bash "$ROOT/scripts/vpn/configure.sh" configure "--vpn=$VPN"
-if [[ $mode == basic ]]; then panel '3/4 / Dotfiles'; else panel '4/5 / Dotfiles'; fi
+if [[ $mode == basic ]]; then phase 3 4 'Dotfiles'; else phase 4 5 'Dotfiles'; fi
 bash "$ROOT/scripts/os/install-dotfiles.sh"
 # Keep the SSH handoff on a usable shell until its replacement is configured.
 usermod -s "$(command -v zsh)" "$ADMIN_USER"
-if [[ $mode == basic ]]; then panel '4/4 / Health check'; else panel '5/5 / Health check'; fi
+if [[ $mode == basic ]]; then phase 4 4 'Health check'; else phase 5 5 'Health check'; fi
 progress 'Check services, firewall, and listening ports' bash "$ROOT/scripts/os/show-status.sh"
 panel 'Setup complete'
 field Account "$ADMIN_USER@$SERVER_HOSTNAME"

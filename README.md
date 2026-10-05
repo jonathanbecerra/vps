@@ -18,8 +18,9 @@ The installer downloads the project and its pinned dotfiles submodule. It
 keeps them in `/opt/vps`, including Git metadata, so you can pull updates.
 It reads prompts from the terminal even when downloaded through a pipe.
 
-Numbered choices accept a number, name, or Enter for the default. Setup shows
-stages and short progress lines, then returns to your shell. Routine output
+Setup clears the terminal once at startup. Numbered choices accept a number,
+name, or Enter for the default; confirmations use `y/N`. Each stage shows its
+position, and each spinner becomes a check with elapsed time. Routine output
 is hidden unless a step fails; Caddy's build stays live. Password prompts and
 the SSH rollback countdown stay visible. Use `make show-status` in `/opt/vps`
 for the full health report after setup.

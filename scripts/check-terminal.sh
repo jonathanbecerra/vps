@@ -21,6 +21,7 @@ if LC_ALL=C grep -q $'\033' "$temporary/success"; then die 'Progress wrote termi
 # Feed menu answers without requiring a terminal in automated checks.
 ask() {
   local reply
+  printf '%s\n' "$2" >>"$temporary/prompts"
   read -r reply
   printf -v "$1" '%s' "${reply:-$3}"
 }
@@ -32,6 +33,18 @@ choose choice Setup basic basic 'Keep identity' advanced 'Configure SSH' >/dev/n
 [[ $choice == basic ]] || die 'Menu did not keep the default.'
 choose choice Setup basic basic 'Keep identity' advanced 'Configure SSH' >/dev/null <<<'advanced'
 [[ $choice == advanced ]] || die 'Menu did not accept a name.'
+grep -q 'Select setup' "$temporary/prompts" || die 'Menu is missing the short selection prompt.'
+for answer in y Y yes YES; do
+  confirm 'Start setup?' >/dev/null <<<"$answer"
+done
+for answer in '' n N no NO; do
+  if (confirm 'Start setup?' <<<"$answer") >/dev/null 2>&1; then die 'Confirmation accepted No or the default.'; fi
+done
+confirm 'Start setup?' >/dev/null 2>&1 <<<'invalid
+y'
+grep -qF '[y/N]' "$temporary/prompts" || die 'Confirmation does not show its safe default.'
+phase 3 4 Dotfiles >"$temporary/phase"
+grep -q '3/4  Dotfiles' "$temporary/phase" || die 'Phase heading lost its position or label.'
 
 # Replace only machine paths. The real bootstrap function and its redirection run.
 mkdir -p "$temporary/bin" "$temporary/installed"
@@ -39,6 +52,7 @@ printf 'ID=ubuntu\n' >"$temporary/os-release"
 cat >"$temporary/setup-vps.sh" <<'FIXTURE'
 #!/bin/sh
 [ "$*" = '--mode basic' ] || exit 81
+[ "${VPS_NO_CLEAR:-}" = 1 ] || exit 83
 read -r answer
 [ "$answer" = ready ] || exit 82
 printf 'Setup finished.\n'

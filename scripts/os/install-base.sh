@@ -70,5 +70,5 @@ install_base() {
   progress 'Configure UFW, fail2ban, and host protection' bash "$ROOT/scripts/os/configure-security.sh"
   release_setup_lock
   trap - EXIT
-  [[ $source_repo == /opt/vps ]] || note "Installed at /opt/vps. Your source checkout remains at $source_repo."
+  [[ $source_repo == /opt/vps ]] || note 'Project installed at /opt/vps.'
 }
