@@ -60,7 +60,11 @@ phase() {
       printf '○ '
     fi
   done
-  printf ' %s%s/%s%s  %s\n' "$C_CYAN" "$current" "$total" "$C_RESET" "$label"
+  if [[ $state == complete ]]; then
+    printf ' %s\n' "$label"
+  else
+    printf ' %s%s/%s%s  %s\n' "$C_CYAN" "$current" "$total" "$C_RESET" "$label"
+  fi
 }
 
 field() { printf '  %-12s %s\n' "$1" "$2"; }
@@ -202,7 +206,7 @@ ask() {
 confirm() {
   local answer
   while :; do
-    ask answer "  $1 [y/N]" ''
+    ask answer "$1 [y/N]" ''
     case ${answer,,} in
       y | yes) return 0 ;;
       '' | n | no) die 'Cancelled.' ;;

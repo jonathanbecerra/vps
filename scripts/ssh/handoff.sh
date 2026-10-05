@@ -101,7 +101,8 @@ ssh_handoff() {
     deadline=$(<"$state_dir/ssh-pending/deadline")
     boot_id=$(<"$state_dir/ssh-pending/boot-id")
     printf '\n\tIn another terminal, open a NEW key-only connection:\n'
-    printf '\tssh -t -o ControlMaster=no -o ControlPath=none -o PreferredAuthentications=publickey -i ~/.ssh/gh_ed25519 -p %s %s@%s\n' "$port" "$ADMIN_USER" "$address"
+    printf '\tssh -t -i ~/.ssh/gh_ed25519 -p %s %s@%s\n' "$port" "$ADMIN_USER" "$address"
+    printf '\tIf your SSH config shares connections, add -S none for this verification.\n'
     printf '\tInside that connection:\n\tcd /opt/vps\n\tmake confirm-ssh\n\n'
     if wait_for_ssh_confirmation "$state_dir" "$attempt" "$deadline" "$boot_id"; then
       # Read by the guided setup's completion summary.

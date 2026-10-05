@@ -102,7 +102,7 @@ grep -q 'Unchanged' "$flow/output" || die 'Basic misreported SSH hardening.'
 if grep -qx ssh "$flow/trace"; then die 'Basic entered the SSH handoff.'; fi
 if grep -q fixture-health-details "$flow/output"; then die 'Routine health output was not hidden.'; fi
 grep -qx 'ADMIN_USER=admin' "$flow/host.conf" || die 'Basic did not save the account for a later run.'
-grep -q '● ● ● ●  4/4  Setup complete' "$flow/output" || die 'Basic left its progress unfinished.'
+grep -q '● ● ● ●  Setup complete' "$flow/output" || die 'Basic left its progress unfinished.'
 grep -q 'Log out and log back in to activate Zsh and Docker group access.' "$flow/output" || die 'Completion omitted the required fresh login.'
 grep -q 'log in again as admin' "$flow/output" || die 'Console login omitted the selected account.'
 grep -qF 'ssh -p PORT admin@HOST' "$flow/output" || die 'Basic omitted its login command.'
@@ -110,6 +110,7 @@ grep -qF 'ssh-copy-id -i ~/.ssh/id_ed25519.pub -p PORT admin@HOST' "$flow/output
 grep -q 'Copying a key does not disable password or root SSH login.' "$flow/output" || die 'Basic confused copying a key with hardening.'
 grep -q 'forwarded port shown by make list-vm' "$flow/output" || die 'Completion omitted the VM port reminder.'
 if grep -Eq 'Status:|Rerun:' "$flow/output"; then die 'Completion still shows maintenance commands.'; fi
+if grep -q 'sudo reboot' "$flow/output"; then die 'Basic showed the confirmed-SSH reboot instruction.'; fi
 
 FIXTURE_PASSWORD_AUTH=no run_flow 1 y
 grep -q 'Use your existing SSH authentication' "$flow/output" || die 'Basic ignored disabled password login.'
@@ -137,21 +138,29 @@ grep -q 'admin@fixture-host' "$flow/output" || die 'Advanced did not reuse the B
 grep -q 'Confirmed / keys only' "$flow/output" || die 'Advanced lost the SSH result.'
 grep -qx 'caddy-mode=private' "$flow/trace" || die 'Advanced lost the Caddy choice.'
 grep -qx install-dotfiles.sh "$flow/trace" || die 'Advanced skipped dotfiles.'
-grep -q '● ● ● ● ●  5/5  Setup complete' "$flow/output" || die 'Advanced left its progress unfinished.'
-grep -qF 'ssh -i ~/.ssh/id_ed25519 -p PORT admin@HOST' "$flow/output" || die 'Advanced omitted key login instructions.'
-if grep -Eq 'account password when prompted|ssh-copy-id' "$flow/output"; then die 'Confirmed SSH suggested password access.'; fi
+grep -q '● ● ● ● ●  Setup complete' "$flow/output" || die 'Advanced left its progress unfinished.'
+grep -qF 'sudo reboot' "$flow/output" || die 'Confirmed Advanced setup omitted the reboot instruction.'
+grep -q 'reconnect with your verified key' "$flow/output" || die 'Advanced omitted the verified-key reminder.'
+if grep -Eq 'account password when prompted|ssh-copy-id|admin@HOST|From your Mac|forwarded port|log in again as|Open a fresh SSH connection' "$flow/output"; then
+  die 'Confirmed Advanced setup still shows the Basic login tutorial.'
+fi
+FIXTURE_CONNECTION='192.0.2.10 50000 192.0.2.20 22' run_flow 2 '' '' y 1 1 1
+grep -qF 'sudo reboot' "$flow/output" || die 'Advanced over SSH omitted the reboot instruction.'
+if grep -q 'Open a fresh SSH connection' "$flow/output"; then die 'Advanced over SSH still shows the Basic footer.'; fi
 run_flow 2 '' '' yes 2
 if grep -Eq '^(setup.sh|configure.sh|install-dotfiles.sh|shell|show-status.sh)$' "$flow/trace"; then
   die 'Advanced started services or dotfiles after Stop.'
 fi
 FIXTURE_SSH_RESULT='Not confirmed / rolled back' run_flow 2 '' '' yes 1 1 1
 grep -q 'SSH hardening was not confirmed' "$flow/output" || die 'Completion hid unconfirmed SSH.'
-if grep -q 'Reconnect with the key you verified' "$flow/output"; then die 'Rollback claimed a verified key login.'; fi
+if grep -Eq 'reconnect with your verified key|sudo reboot|SSH hardening is confirmed' "$flow/output"; then die 'Rollback claimed a verified key login or instructed a reboot.'; fi
 if FIXTURE_HEALTH_STATUS=7 run_flow 1 yes; then
   die 'A failed health check passed setup.'
 fi
 grep -q fixture-health-details "$flow/output" || die 'Setup hid a failed health check.'
 if grep -q 'Setup complete' "$flow/output"; then die 'Setup claimed success after a failure.'; fi
 run_flow 2 '' deploy y 1 1 1
-grep -qF 'ssh -i ~/.ssh/id_ed25519 -p PORT deploy@HOST' "$flow/output" || die 'Login instructions hard-coded the admin username.'
+grep -qF 'deploy@fixture-host' "$flow/output" || die 'Advanced hard-coded the admin username.'
+FIXTURE_SSH_RESULT='Not confirmed / rolled back' run_flow 2 '' deploy y 1 1 1
+grep -qF 'ssh -p PORT deploy@HOST' "$flow/output" || die 'Recovery login hard-coded the admin username.'
 printf 'SSH receipt/key guards, guided flow fixtures, and setup/VPN previews passed.\n'

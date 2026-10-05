@@ -128,19 +128,20 @@ if [[ $ssh_result == Unchanged ]]; then
 elif [[ $ssh_result != Confirmed* ]]; then
   printf '%sSSH hardening was not confirmed. Review access before exposing this host.%s\n' "$C_RED" "$C_RESET"
 fi
-if [[ -n ${SSH_CONNECTION:-} ]]; then
-  printf '\n%sOpen a fresh SSH connection to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
-  printf 'Keep this session open until the new login works, then close it with exit.\n'
-else
-  printf '\n%sLog out and log back in to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
-  printf 'On this console, run exit and log in again as %s.\n' "$ADMIN_USER"
-fi
-printf '\nFrom your Mac, replace HOST and PORT with the reachable address and SSH port.\n'
-printf 'For a VM, use 127.0.0.1 and the forwarded port shown by make list-vm.\n'
 if [[ $ssh_result == Confirmed* ]]; then
-  printf 'Reconnect with the key you verified; replace the key path below:\n'
-  printf '\tssh -i ~/.ssh/id_ed25519 -p PORT %s@HOST\n' "$ADMIN_USER"
+  printf '\n%sSSH hardening is confirmed. Reboot to finish setup, then reconnect with your verified key.%s\n' "$C_YELLOW" "$C_RESET"
+  printf 'Your next login will use Zsh and the Docker group.\n'
+  printf '\tsudo reboot\n'
 else
+  if [[ -n ${SSH_CONNECTION:-} ]]; then
+    printf '\n%sOpen a fresh SSH connection to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
+    printf 'Keep this session open until the new login works, then close it with exit.\n'
+  else
+    printf '\n%sLog out and log back in to activate Zsh and Docker group access.%s\n' "$C_YELLOW" "$C_RESET"
+    printf 'On this console, run exit and log in again as %s.\n' "$ADMIN_USER"
+  fi
+  printf '\nFrom your Mac, replace HOST and PORT with the reachable address and SSH port.\n'
+  printf 'For a VM, use 127.0.0.1 and the forwarded port shown by make list-vm.\n'
   printf '\tssh -p PORT %s@HOST\n' "$ADMIN_USER"
   read -r client_ip _ server_ip server_port <<<"${SSH_CONNECTION:-127.0.0.1 0 127.0.0.1 22}"
   if policy=$(/usr/sbin/sshd -T -C "user=$ADMIN_USER,addr=$client_ip,laddr=$server_ip,lport=$server_port" 2>/dev/null); then
@@ -159,5 +160,5 @@ else
     printf 'Could not check SSH authentication. Keep console access and use your existing login method.\n'
   fi
   printf 'Use Advanced to configure and verify key-only SSH.\n'
+  [[ ! -f /var/run/reboot-required ]] || note 'Ubuntu needs a reboot. Reboot when ready.'
 fi
-[[ ! -f /var/run/reboot-required ]] || note 'Ubuntu needs a reboot. Reboot when ready.'
