@@ -221,3 +221,17 @@ separate VMs.
 make stop-vm name=lab
 make teardown-vm name=lab
 ```
+
+## Releases
+
+After the reviewed commits are pushed to `main`, generate and review the notes
+before tagging. `git-cliff` reads Conventional Commits since the previous tag
+and omits `chore` and `ci` entries. Publish its output unchanged:
+
+```sh
+version=MAJOR.MINOR.PATCH
+make release-notes version="$version" > "/tmp/vps-$version-notes.md"
+git tag -a "$version" -m "$version"
+git push origin "$version"
+gh release create "$version" --verify-tag --notes-file "/tmp/vps-$version-notes.md"
+```
