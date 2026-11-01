@@ -112,8 +112,6 @@ bash "$ROOT/scripts/caddy/setup.sh"
 bash "$ROOT/scripts/vpn/configure.sh" configure "--vpn=$VPN"
 if [[ $mode == basic ]]; then phase 3 4 'Dotfiles'; else phase 4 5 'Dotfiles'; fi
 bash "$ROOT/scripts/os/install-dotfiles.sh"
-# Keep the SSH handoff on a usable shell until its replacement is configured.
-usermod -s "$(command -v zsh)" "$ADMIN_USER"
 if [[ $mode == basic ]]; then phase 4 4 'Health check'; else phase 5 5 'Health check'; fi
 progress 'Check services, firewall, and listening ports' bash "$ROOT/scripts/os/show-status.sh"
 if [[ $mode == basic ]]; then phase 4 4 'Setup complete' complete; else phase 5 5 'Setup complete' complete; fi

@@ -72,7 +72,8 @@ setup-host:
 	@VPS_NO_CLEAR=1 $(MAKE) --no-print-directory show-status
 
 install-dotfiles:
-	@bash scripts/os/install-dotfiles.sh --reload-shell
+	@bash scripts/os/install-dotfiles.sh
+	@if [ "$(DRY_RUN)" != 1 ]; then $(MAKE) --no-print-directory reload-zsh; fi
 
 reload-zsh:
 	@printf '\033[<u\033[=0;1u'

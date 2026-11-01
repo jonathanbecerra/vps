@@ -7,6 +7,35 @@ source "$ROOT/scripts/ssh/handoff.sh"
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 
+if ((EUID != 0)); then
+  shell_fixture="$temporary/shell"
+  mkdir -p "$shell_fixture/bin" "$shell_fixture/dotfiles/scripts"
+  cat >"$shell_fixture/bin/uname" <<'FIXTURE'
+#!/bin/sh
+printf 'Linux\n'
+FIXTURE
+  cat >"$shell_fixture/bin/sudo" <<'FIXTURE'
+#!/bin/sh
+printf 'sudo %s\n' "$*" >>"$SHELL_FIXTURE/trace"
+FIXTURE
+  cat >"$shell_fixture/dotfiles/scripts/install.sh" <<'FIXTURE'
+#!/bin/sh
+printf 'install\n' >>"$SHELL_FIXTURE/trace"
+exit "${FIXTURE_INSTALL_RESULT:-0}"
+FIXTURE
+  chmod +x "$shell_fixture/bin/uname" "$shell_fixture/bin/sudo"
+  PATH="$shell_fixture/bin:$PATH" DOTFILES_DIR="$shell_fixture/dotfiles" SHELL_FIXTURE="$shell_fixture" \
+    bash "$ROOT/scripts/os/install-dotfiles.sh"
+  [[ $(<"$shell_fixture/trace") == $'install\n'"sudo usermod -s $(command -v zsh) $(id -un)" ]] ||
+    die 'Make dotfiles did not set the current Linux login shell after installation.'
+  : >"$shell_fixture/trace"
+  if PATH="$shell_fixture/bin:$PATH" DOTFILES_DIR="$shell_fixture/dotfiles" SHELL_FIXTURE="$shell_fixture" \
+    FIXTURE_INSTALL_RESULT=7 bash "$ROOT/scripts/os/install-dotfiles.sh"; then
+    die 'A failed dotfiles installation changed the login shell.'
+  fi
+  [[ $(<"$shell_fixture/trace") == install ]] || die 'A failed dotfiles installation changed the login shell.'
+fi
+
 [[ $(ssh_handoff_state "$temporary" current) == rolled-back ]] || die 'Missing state was treated as confirmation.'
 printf 'previous\n' >"$temporary/ssh-confirmed"
 [[ $(ssh_handoff_state "$temporary" current) == rolled-back ]] || die 'Accepted an old confirmation.'
