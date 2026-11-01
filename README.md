@@ -224,14 +224,15 @@ make teardown-vm name=lab
 
 ## Releases
 
-After the reviewed commits are pushed to `main`, generate and review the notes
-before tagging. `git-cliff` reads Conventional Commits since the previous tag
-and omits `chore` and `ci` entries. Publish its output unchanged:
+After the reviewed commits are pushed to `main`, preview the notes, then
+publish the release. `git-cliff` reads Conventional Commits since the previous
+tag and omits `chore` and `ci` entries. The release command checks that `main`
+is clean and pushed, then uses the generated notes unchanged:
 
 ```sh
-version=MAJOR.MINOR.PATCH
-make release-notes version="$version" > "/tmp/vps-$version-notes.md"
-git tag -a "$version" -m "$version"
-git push origin "$version"
-gh release create "$version" --verify-tag --notes-file "/tmp/vps-$version-notes.md"
+make release-notes VERSION=0.2.0
+make release VERSION=0.2.0
 ```
+
+Use `DRY_RUN=1 make release VERSION=0.2.0` to preview the release command.
+If GitHub publication fails after the tag push, rerun the same command.

@@ -43,5 +43,6 @@ else
   printf 'Skipping Compose checks. Install Docker Compose to run them.\n'
 fi
 bash scripts/check-setup.sh
+bash scripts/check-release.sh
 bash scripts/check-terminal.sh
 printf 'Syntax, formatting, and config checks passed.\n'

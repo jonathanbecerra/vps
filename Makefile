@@ -2,7 +2,7 @@
 export DRY_RUN HOST STACK
 DOTFILES_DIR ?= $(CURDIR)/dotfiles
 export DOTFILES_DIR
-.PHONY: help setup release-notes
+.PHONY: help setup release release-notes
 .PHONY: check-editor check-repo show-status
 .PHONY: install-dotfiles reload-zsh stow-dotfiles install-packages setup-host update-system
 .PHONY: refresh-dotfiles restore-dotfiles
@@ -35,7 +35,8 @@ help:
 	  '  setup-host          Synchronize time, install the host, selected Caddy role, and show status' \
 	  '  show-status         Show SSH, firewall, services, ports, and disks' \
 	  '  update-system       Update Ubuntu packages' \
-	  '  release-notes       Print git-cliff notes before tagging (version=...)' \
+	  '  release-notes       Preview git-cliff notes (VERSION=x.x.x)' \
+	  '  release             Tag, push, and publish a GitHub release (VERSION=x.x.x)' \
 	  '' \
 	  'Caddy:' \
 	  '  build-caddy         Rebuild the native Caddy binary with Cloudflare DNS' \
@@ -67,8 +68,10 @@ setup:
 	@sh ./install.sh $(if $(mode),--mode $(mode))
 
 release-notes:
-	@test -n "$(version)" || { printf 'Usage: make release-notes version=MAJOR.MINOR.PATCH\n' >&2; exit 2; }
-	@git-cliff --unreleased --tag "$(version)"
+	@bash scripts/release.sh notes
+
+release:
+	@bash scripts/release.sh publish
 
 setup-host:
 	@bash scripts/root.sh scripts/os/sync-time.sh
