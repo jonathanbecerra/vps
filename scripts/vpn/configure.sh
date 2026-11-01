@@ -35,6 +35,13 @@ apply_tailscale() {
   compose --profile tailscale ps tailscale
 }
 
+tailscale_up() {
+  local hostname
+  hostname=$(sed -n 's/^VPN_HOSTNAME=//p' "$ROOT/.local/tailscale.env")
+  [[ $hostname =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die 'Invalid VPN_HOSTNAME in tailscale.env.'
+  compose --profile tailscale exec tailscale tailscale up --accept-dns=false --hostname="$hostname"
+}
+
 case "$action" in
   apply)
     apply_tailscale
@@ -48,7 +55,7 @@ case "$action" in
     fi
     stack=tailscale
     check_stack
-    compose --profile tailscale exec tailscale tailscale up --accept-dns=false
+    tailscale_up
     exit 0
     ;;
   configure) ;;
@@ -100,7 +107,7 @@ if [[ $VPN == tailscale ]]; then
   apply_tailscale
   if ! grep -Eq '^TS_AUTHKEY=.+$' "$ROOT/.local/tailscale.env"; then
     note 'Complete Tailscale login in your browser using the URL below.'
-    compose --profile tailscale exec tailscale tailscale up --accept-dns=false
+    tailscale_up
   fi
 elif [[ $VPN == none ]]; then
   note 'No VPN selected.'

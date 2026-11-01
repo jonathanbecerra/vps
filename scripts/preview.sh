@@ -127,7 +127,7 @@ preview_stack() {
       run "${compose[@]}" up -d --no-build --wait --wait-timeout 90 "$stack"
       run "${compose[@]}" ps
       ;;
-    vpn-login) run "${compose[@]}" exec tailscale tailscale up --accept-dns=false ;;
+    vpn-login) run "${compose[@]}" exec tailscale tailscale up --accept-dns=false --hostname='<saved-vpn-hostname>' ;;
   esac
 }
 

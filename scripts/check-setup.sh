@@ -69,6 +69,24 @@ STACK=tailscale DRY_RUN=1 bash "$ROOT/scripts/vpn/lock-tailscale.sh" verify >/de
 vpn=$(DRY_RUN=1 bash "$ROOT/scripts/vpn/configure.sh" configure --vpn=tailscale)
 grep -q 'up -d --no-build' <<<"$vpn" || die 'VPN preview did not include starting Tailscale.'
 
+# Check that browser login keeps the hostname already set by the container.
+sed -n '/^tailscale_up() {/,/^}/p' "$ROOT/scripts/vpn/configure.sh" >"$temporary/tailscale-up.sh"
+saved_root=$ROOT
+ROOT="$temporary/tailscale-fixture"
+mkdir -p "$ROOT/.local"
+printf 'VPN_HOSTNAME=isaribi\nTS_AUTHKEY=\n' >"$ROOT/.local/tailscale.env"
+# shellcheck disable=SC2329
+compose() { printf '%s\n' "$*" >"$ROOT/compose-call"; }
+# shellcheck source=/dev/null
+source "$temporary/tailscale-up.sh"
+tailscale_up
+grep -qxF -- '--profile tailscale exec tailscale tailscale up --accept-dns=false --hostname=isaribi' "$ROOT/compose-call" ||
+  die 'Tailscale login omitted the saved settings.'
+printf 'VPN_HOSTNAME=bad name\n' >"$ROOT/.local/tailscale.env"
+if (tailscale_up >"$ROOT/invalid-output" 2>&1); then die 'Accepted an invalid Tailscale hostname.'; fi
+unset -f compose tailscale_up
+ROOT=$saved_root
+
 # Exercise the real guide with inert host operations and file-backed answers.
 flow="$temporary/flow"
 mkdir -p "$flow/scripts/"{os,ssh,caddy,vpn}
